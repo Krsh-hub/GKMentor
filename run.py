@@ -19,6 +19,9 @@
   python run.py check-llm                              verify provider, key and model names with a tiny call
   python run.py approve-all                            demo helper"""
 import argparse, sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 from datetime import date
 from gk import db, pipeline, aggregate, config, editorial, gold
 from gk.llm import get_llm

@@ -17,6 +17,14 @@ htmlcov/
 .tox/
 .nox/
 
+# Database files (may contain user data)
+*.db
+*.db-wal
+*.db-shm
+
+# Generated output
+out/
+
 # Environment and secrets
 .env
 .env.*

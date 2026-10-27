@@ -1,4 +1,4 @@
-import sqlite3
+import sqlite3, time
 from . import config
 
 SCHEMA = """
@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS users(
   created TEXT DEFAULT CURRENT_TIMESTAMP, last_login TEXT);
 CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id INTEGER, expires REAL);
 CREATE TABLE IF NOT EXISTS user_state(user_id INTEGER, key TEXT, value TEXT, PRIMARY KEY(user_id, key));
+CREATE TABLE IF NOT EXISTS login_attempts(
+  email TEXT PRIMARY KEY, fails INTEGER DEFAULT 0, locked_until REAL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS static_cats(
   id INTEGER PRIMARY KEY, slug TEXT UNIQUE, name TEXT, kind TEXT DEFAULT 'table', columns_json TEXT,
   volatility TEXT DEFAULT 'stable', sort INTEGER DEFAULT 100);
@@ -51,6 +53,7 @@ CREATE TABLE IF NOT EXISTS runs(
 def connect(path=None):
     con = sqlite3.connect(path or config.DB_PATH)
     con.row_factory = sqlite3.Row
+    con.execute("PRAGMA journal_mode=WAL")                          # better concurrent read/write
     con.executescript(SCHEMA)
     have = {r[1] for r in con.execute("PRAGMA table_info(editorials)")}
     for col in ("source TEXT DEFAULT 'admin'", "flags TEXT DEFAULT ''"):       # upgrade databases created by older versions
@@ -62,9 +65,12 @@ def connect(path=None):
             con.execute(f"ALTER TABLE articles ADD COLUMN {col}")
     from . import static
     static.ensure_categories(con)
+    # housekeeping: purge expired sessions (cheap, runs once per connect)
+    con.execute("DELETE FROM sessions WHERE expires < ?", (time.time(),))
     con.commit()
     return con
 
 def log(con, day, stage, detail):
     con.execute("INSERT INTO runs(day,stage,detail) VALUES(?,?,?)", (day, stage, str(detail)))
     con.commit()
+

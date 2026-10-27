@@ -1,6 +1,6 @@
 """Local admin web app (no Streamlit). Standard library only. Binds to 127.0.0.1.
 Set GK_ADMIN_PASSWORD to require a password for every API call."""
-import json, os, re, webbrowser, mimetypes
+import json, os, re, sys, traceback, webbrowser, mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -131,7 +131,10 @@ def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
         def _send(self, code, body, ctype="application/json"):
             raw = body if isinstance(body, bytes) else (json.dumps(body) if ctype == "application/json" else body).encode("utf-8")
             self.send_response(code); self.send_header("Content-Type", ctype + "; charset=utf-8")
-            self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.write(raw)
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.end_headers(); self.wfile.write(raw)
         def _guard(self, api):
             if (self.headers.get("Host") or "").split(":")[0] not in ("localhost", "127.0.0.1"):
                 self._send(403, {"error": "bad host"}); return False
@@ -182,7 +185,7 @@ def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
             if not self._guard(True): return
             con = db.connect(db_path)
             try:
-                d = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                d = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 500_000)) or b"{}")
                 if u.path == "/api/note":
                     r = _post_note(con, d); _auto(con); return self._send(200, r)
                 if u.path == "/api/question":
@@ -221,7 +224,9 @@ def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
                     return self._send(200, {"notes": n, "questions": q, "editorials": e})
                 self._send(404, {"error": "not found"})
             except Exception as ex:
-                self._send(500, {"error": str(ex)})
+                print(f"[admin] ERROR {u.path}: {ex}", file=sys.stderr, flush=True)
+                traceback.print_exc(file=sys.stderr)
+                self._send(500, {"error": "Something went wrong."})
             finally:
                 con.close()
     return ThreadingHTTPServer(("127.0.0.1", port), H)

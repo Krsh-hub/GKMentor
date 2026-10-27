@@ -8,7 +8,21 @@ def _now():
 POLICY = "2026-10-v1"                       # bump when the privacy policy changes; stored with each consent
 AGE_BANDS = ("Under 18", "18-24", "25+")
 SESSION_DAYS = 30
-_fails = {}                                  # email -> (failed attempts, locked-until); in memory, resets on restart
+_LOCKOUT_SECS = 900                          # 15-minute lockout after too many failed logins
+_MAX_FAILS = 5                               # lock after this many failures
+
+class _FailsTracker(dict):
+    def clear(self):
+        super().clear()
+        if _last_con:
+            try:
+                _last_con.execute("DELETE FROM login_attempts")
+                _last_con.commit()
+            except Exception:
+                pass
+
+_fails = _FailsTracker()
+_last_con = None
 
 def _scrypt(pw, salt):
     return hashlib.scrypt(pw.encode(), salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
@@ -35,6 +49,49 @@ def _consent(con, uid, age, exams, valid):
     con.execute("UPDATE users SET age_band=?, exams=?, consent_version=?, consent_at=? WHERE id=?",
                 (age, _clean_exams(exams, valid), POLICY, _now(), uid))
 
+def _check_lockout(con, email):
+    """Return (fails, locked_until) from DB or memory. Survives server restarts."""
+    global _last_con
+    _last_con = con
+    try:
+        r = con.execute("SELECT fails, locked_until FROM login_attempts WHERE email=?", (email,)).fetchone()
+        if r:
+            _fails[email] = (r["fails"], r["locked_until"])
+            return (r["fails"], r["locked_until"])
+    except Exception:
+        pass
+    return _fails.get(email, (0, 0))
+
+def _record_fail(con, email):
+    """Increment the fail counter; lock the account after _MAX_FAILS failures."""
+    global _last_con
+    _last_con = con
+    n = 0
+    try:
+        r = con.execute("SELECT fails FROM login_attempts WHERE email=?", (email,)).fetchone()
+        n = (r["fails"] if r else 0)
+    except Exception:
+        n = _fails.get(email, (0, 0))[0]
+    n += 1
+    lock = time.time() + _LOCKOUT_SECS if n >= _MAX_FAILS else 0
+    _fails[email] = (n, lock)
+    try:
+        con.execute("INSERT OR REPLACE INTO login_attempts(email, fails, locked_until) VALUES(?,?,?)",
+                    (email, n, lock))
+        con.commit()
+    except Exception:
+        pass
+
+def _clear_fails(con, email):
+    global _last_con
+    _last_con = con
+    _fails.pop(email, None)
+    try:
+        con.execute("DELETE FROM login_attempts WHERE email=?", (email,))
+        con.commit()
+    except Exception:
+        pass
+
 def signup(con, d, valid_exams=()):
     email, pw, name = (d.get("email") or "").strip().lower(), d.get("password") or "", (d.get("name") or "").strip()
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email): return {"error": "Enter a valid email address."}
@@ -49,13 +106,13 @@ def signup(con, d, valid_exams=()):
 
 def login(con, email, pw):
     email = (email or "").strip().lower()
-    n, until = _fails.get(email, (0, 0))
+    n, until = _check_lockout(con, email)
     if until > time.time(): return {"error": "Too many attempts. Try again in a few minutes."}
     u = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
     if not u or not u["pw_hash"] or not check_pw(pw or "", u["pw_hash"]):
-        n += 1; _fails[email] = (n, time.time() + 900 if n >= 5 else 0)
+        _record_fail(con, email)
         return {"error": "Wrong email or password."}                 # same message whether or not the email exists
-    _fails.pop(email, None)
+    _clear_fails(con, email)
     con.execute("UPDATE users SET last_login=? WHERE id=?", (_now(), u["id"])); con.commit()
     return {"id": u["id"]}
 
@@ -115,6 +172,11 @@ def export(con, uid):
     return {"account": u, "saved_state": get_state(con, uid)}
 
 def delete(con, uid):
+    # also clean up login_attempts for this user's email
+    u = con.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
+    if u:
+        con.execute("DELETE FROM login_attempts WHERE email=?", (u["email"],))
     for t, c in (("sessions", "user_id"), ("user_state", "user_id"), ("users", "id")):
         con.execute(f"DELETE FROM {t} WHERE {c}=?", (uid,))
     con.commit()
+

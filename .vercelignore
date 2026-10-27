@@ -1,0 +1,8 @@
+# Ignore backend files so Vercel doesn't detect Python serverless functions
+requirements.txt
+run.py
+gk/
+tests/
+.pytest_cache/
+*.db*
+out/

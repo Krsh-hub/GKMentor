@@ -2,5 +2,15 @@
   "framework": null,
   "buildCommand": "",
   "outputDirectory": "site",
-  "cleanUrls": true
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/auth/:path*",
+      "destination": "https://gkmentor.onrender.com/auth/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://gkmentor.onrender.com/api/:path*"
+    }
+  ]
 }

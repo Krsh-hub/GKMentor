@@ -1,0 +1,7 @@
+pydantic>=2
+feedparser>=6
+pyyaml>=6
+anthropic>=0.40       # needed only if you use Claude
+google-genai>=1.0     # needed only if you use Gemini
+trafilatura>=1.8      # optional: full-text extraction
+pytest>=8

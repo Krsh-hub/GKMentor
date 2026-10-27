@@ -1,0 +1,67 @@
+"""Build the reader-facing static site (site/index.html + site/data.js) from APPROVED notes only.
+Host the folder anywhere (open index.html locally, GitHub Pages, Netlify, any web server)."""
+import json
+from datetime import datetime
+from pathlib import Path
+from . import config, static
+
+# Menu sections -> model sectors. Edit freely: each key becomes a menu tab.
+GROUPS = {
+    "Economy": ["Economy", "Banking"],
+    "Business & Corporate": ["Business"],
+    "Polity & Administration": ["Polity", "Schemes"],
+    "International": ["IR"],
+    "Science & Tech": ["S&T"],
+    "Environment": ["Environment"],
+    "Defence": ["Defence"],
+    "Awards & Sports": ["Awards", "Sports", "Appointments"],
+    "Reports & Indices": ["Reports&Indices"],
+    "Other": ["Other"],
+}
+PUB = "('approved','auto_published')"
+
+def build_site(con, out="site", title="GK Daily"):
+    out = Path(out); out.mkdir(parents=True, exist_ok=True)
+    notes = []
+    for n in con.execute(f"SELECT * FROM notes WHERE status IN {PUB} ORDER BY day DESC, id DESC"):
+        b = json.loads(n["body_json"])
+        facts = [{"k": c["kind"], "t": c["text"]} for c in
+                 con.execute("SELECT kind,text FROM claims WHERE note_id=? AND grounded=1", (n["id"],))]
+        notes.append(dict(id=n["id"], day=n["day"], sector=n["sector"], headline=n["headline"], bullets=b["bullets"],
+                          exam_angle=b.get("exam_angle", ""), static_links=b.get("static_links", []),
+                          lens_points=b.get("lens_points", {}), importance=n["importance"],
+                          lenses=[x for x in (n["lenses"] or "").split(",") if x],
+                          sources=json.loads(n["source_urls"] or "[]"), facts=facts,
+                          reported=(lambda r: r if r and r < n["day"] else None)(
+                              con.execute("SELECT MIN(COALESCE(pub_day, fetched_on)) FROM articles WHERE cluster_id=?", (n["cluster_id"],)).fetchone()[0])))
+    qs = []
+    for q in con.execute(f"SELECT q.id, q.body_json, n.day, n.sector FROM questions q JOIN notes n ON n.id=q.note_id "
+                         f"WHERE q.status='approved' AND q.valid=1 AND n.status IN {PUB}"):
+        m = json.loads(q["body_json"])
+        qs.append(dict(id=q["id"], day=q["day"], sector=q["sector"], q=m["question"], options=m["options"],
+                       answer=m["answer_index"], explanation=m["explanation"], difficulty=m.get("difficulty", "medium")))
+    eds = [dict(id=e["id"], day=e["day"], title=e["title"], body_md=e["body_md"], author=e["author"],
+                lenses=[x for x in (e["lenses"] or "").split(",") if x])
+           for e in con.execute("SELECT * FROM editorials WHERE status='published' ORDER BY day DESC, id DESC")]
+    gd = [dict(id=g["id"], day=g["day"], sector=g["sector"], topic=g["topic"], context=g["context"],
+               for_points=json.loads(g["for_json"]), against_points=json.loads(g["against_json"]),
+               key_facts=json.loads(g["facts_json"]), opening=g["opening"], conclusion=g["conclusion"])
+          for g in con.execute("SELECT * FROM gd_topics WHERE status='approved' ORDER BY day DESC, id DESC")]
+    scats, squestions = [], []
+    for c in static.overview(con):
+        items = static.list_items(con, c["slug"], "approved")
+        if not items: continue
+        scats.append(dict(slug=c["slug"], name=c["name"], kind=c["kind"], columns=c["columns"], sort=static.DEFAULT_SORT.get(c["slug"]), filter=static.DEFAULT_FILTER.get(c["slug"]),
+                          items=[dict(id=i["id"], data=i["data"], as_on=i["as_on"], volatility=i["volatility"], source=i["source"] if str(i["source"]).startswith("http") else "") for i in items]))
+        squestions += static.build_questions(c, items)
+    lenses = {k: {"label": v["label"], "sectors": v.get("sectors", [])} for k, v in config.load_lenses().items()}
+    data = dict(generated=datetime.now().strftime("%d %b %Y, %H:%M"), groups=GROUPS, lenses=lenses,
+                notes=notes, questions=qs, editorials=eds, gd=gd, static=scats, static_questions=squestions)
+    (out / "data.js").write_text("window.GK_DATA=" + json.dumps(data, ensure_ascii=False) + ";", encoding="utf-8")
+    html = (Path(__file__).with_name("site_template.html")).read_text(encoding="utf-8").replace("__TITLE__", title)
+    (out / "index.html").write_text(html, encoding="utf-8")
+    import os
+    from .users import POLICY
+    (out / "privacy.html").write_text((Path(__file__).with_name("privacy_template.html")).read_text(encoding="utf-8")
+                                      .replace("__POLICY__", POLICY).replace("__CONTACT__", os.getenv("GK_CONTACT_EMAIL", "Add your contact email (GK_CONTACT_EMAIL).")), encoding="utf-8")
+    return out / "index.html", len(notes), len(qs), len(eds)

@@ -1,0 +1,189 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GK Daily</title>
+<style>
+:root{--bg:#0c1117;--p:#121922;--p2:#18212c;--ln:#222d3a;--tx:#e6eaf0;--mu:#8793a3;--am:#e0a52c;--gn:#34d399;--bd:#f87171;--ac:#e0a52c;--ok:#34d399}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 Inter,"Segoe UI",system-ui,sans-serif}
+select,input,.pill,.row b{font-family:ui-monospace,"Cascadia Code",Consolas,monospace}
+header{border-bottom:1px solid var(--ln)}.hd{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 36px 14px}
+.hd h1{margin:0;font-size:26px;font-weight:800;cursor:pointer}.hd p{margin:4px 0 0;color:var(--mu);max-width:720px}
+input[type=search]{background:var(--p);border:1px solid var(--ln);color:var(--tx);padding:10px 14px;border-radius:10px;width:260px;outline:0}input[type=search]:focus{border-color:var(--am)}
+nav{display:flex;flex-wrap:wrap;gap:6px 8px;padding:12px 36px 0;border-top:1px solid var(--ln)}
+nav a{padding:10px 14px;border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;color:var(--tx);font-weight:600;cursor:pointer;white-space:nowrap}
+nav a:hover{background:var(--p)}nav a.on{background:var(--p2);border-color:var(--ln);box-shadow:inset 0 2px 0 var(--am)}nav i{width:1px;background:var(--ln);margin:4px 6px;flex:none}
+.lay{display:flex;min-height:72vh}aside{width:310px;flex:none;border-right:1px solid var(--ln);padding:20px 24px}
+aside label,.panel label{display:block;color:var(--mu);font-size:12.5px;margin:14px 0 6px}
+select{width:100%;background:var(--p);color:var(--tx);border:1px solid var(--ln);border-radius:10px;padding:11px 12px}
+.go{width:100%;margin-top:26px;background:var(--am);color:#1a1405;border:0;border-radius:10px;padding:13px;font-weight:700;font-size:14px;cursor:pointer}.go:hover{filter:brightness(1.1)}
+.side-note{color:var(--mu);font-size:12.5px;margin-top:14px}.main{flex:1;padding:22px 32px;min-width:0}.single{max-width:860px;margin:0 auto;padding:22px}
+h2{margin:0 0 14px;font-size:20px}h2 small{color:var(--mu);font-size:13px;font-weight:500;margin-left:10px}
+h4.dh{margin:24px 0 10px;color:var(--mu);font-size:12px;text-transform:uppercase;letter-spacing:1px}
+.days{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px}.chip{padding:5px 12px;border-radius:8px;border:1px solid var(--ln);color:var(--mu);cursor:pointer;font-size:12px;font-weight:600}
+.chip:hover{color:var(--tx)}.chip.on{background:var(--am);border-color:var(--am);color:#1a1405}
+[hidden]{display:none!important}
+th.sr{cursor:pointer;user-select:none}th.sr:hover{color:var(--tx)}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:16px}.cmp b{display:block;margin-bottom:4px}.pf{color:var(--gn)}.pa{color:var(--bd)}.grid.gd{grid-template-columns:repeat(auto-fill,minmax(440px,1fr))}.pill{white-space:normal}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.card{background:var(--p);border:1px solid var(--ln);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.card .top{display:flex;justify-content:space-between;gap:12px}.card h3{margin:0;font-size:16px;line-height:1.3}.sub{color:var(--mu);font-size:12.5px;margin-top:3px}
+.rt{display:flex;gap:8px;align-items:flex-start;flex:none}.badge{text-align:right;font-size:11.5px;color:var(--mu);line-height:1.2}
+.badge b{display:inline-block;padding:5px 12px;border-radius:8px;font-size:14px;margin-bottom:3px}.badge .High{background:#3b2f0e;color:var(--am)}.badge .Medium{background:#0f3b30;color:var(--gn)}.badge .Low{background:#1d2631;color:var(--mu)}
+.tags{display:flex;gap:6px;flex-wrap:wrap}.pill{padding:3px 9px;border-radius:6px;background:#0f3b30;color:var(--gn);font-size:11.5px}.pill.n{background:var(--p2);color:var(--mu)}
+.card ul{margin:0;padding-left:18px;color:#c3ccd8}.card li{margin:3px 0}.row{display:flex;justify-content:space-between;color:var(--mu)}.row b{color:var(--tx)}
+.open{margin-top:auto;background:transparent;border:1px solid var(--ln);color:var(--tx);border-radius:10px;padding:11px;font-weight:600;cursor:pointer}.open:hover{background:var(--p2)}
+.star{background:0;border:0;color:var(--mu);font-size:18px;cursor:pointer;padding:0}.star.on{color:var(--am)}
+.more{padding-top:10px;border-top:1px dashed var(--ln);font-size:13px}.more p{margin:6px 0}.more b{color:var(--am)}.more a{color:var(--am);font-size:12px}
+.ed{background:var(--p);border:1px solid var(--am);border-radius:14px;padding:18px 22px;margin:0 0 18px}.ed h3{margin:8px 0 10px;font-size:19px}.ed .by{color:var(--mu);font-size:12px;margin-top:10px}.ed .body p,.ed .body ul{margin:8px 0}
+.tag{padding:2px 9px;border-radius:6px;background:#3b2f0e;color:var(--am);font-size:11px;font-weight:700}
+.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}.stat{background:var(--p);border:1px solid var(--ln);border-radius:12px;padding:12px 18px;min-width:130px}.stat b{display:block;font-size:24px}.stat span{color:var(--mu);font-size:12px}
+.btn{background:var(--am);color:#1a1405;border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer}.btn.g{background:var(--p2);color:var(--tx);border:1px solid var(--ln)}
+.panel{background:var(--p);border:1px solid var(--ln);border-radius:14px;padding:20px}
+.opt{display:block;width:100%;text-align:left;background:var(--p2);border:1px solid var(--ln);color:var(--tx);padding:12px 14px;border-radius:10px;margin:8px 0;cursor:pointer;font-size:14px}
+.opt:hover{border-color:var(--am)}.opt.ok{border-color:var(--ok);background:#34d39922}.opt.bad{border-color:var(--bd);background:#f8717122}
+.prog{height:6px;background:var(--p2);border-radius:9px;margin-bottom:16px}.prog i{display:block;height:100%;background:var(--am);border-radius:9px}
+.expl{margin:12px 0;padding:12px;background:#e0a52c14;border-radius:10px;color:#d3dae5}
+table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:7px 10px;border-bottom:1px solid var(--ln);text-align:left}th{color:var(--mu);font-weight:600}
+.must{background:var(--p);border:1px solid var(--ln);border-radius:12px;padding:14px 20px;margin-bottom:16px}.must li{margin:4px 0}.mu{color:var(--mu)}footer{text-align:center;color:var(--mu);font-size:12px;padding:30px}
+.ov{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;z-index:50}.ov.on{display:flex}
+.mb{background:var(--p);border:1px solid var(--ln);border-radius:16px;padding:24px;width:min(440px,92vw);max-height:90vh;overflow:auto}.mb h2{margin:0 0 6px}
+.mb input[type=text],.mb input[type=email],.mb input[type=password]{width:100%;background:var(--p2);color:var(--tx);border:1px solid var(--ln);border-radius:10px;padding:10px 12px;outline:0}
+.mb label{display:block;color:var(--mu);font-size:12.5px;margin:12px 0 4px}.mb label.ck{display:flex;gap:8px;align-items:center;color:var(--tx);margin:6px 0}.mb a{color:var(--am)}.err{color:var(--bd);margin-top:10px;min-height:18px;font-size:13px}
+@media(max-width:860px){.lay{flex-direction:column}aside{width:auto;border-right:0;border-bottom:1px solid var(--ln)}.hd,nav{padding-left:16px;padding-right:16px}.main{padding:16px}}
+</style></head><body>
+<header><div class="hd"><div><h1 onclick="go('today')">GK Daily Dashboard</h1><p>Daily current affairs for competitive exams: filter by exam, section and priority, open the exam notes, or take a test.</p></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><input id="q" type="search" placeholder="Search notes..." oninput="srch(this.value)"><div id="acct"></div></div></div><nav id="nav"></nav><div id="sub"></div></header>
+<div class="ov" id="ov" onclick="if(event.target.id==='ov'&&!(ME&&!ME.profile_complete))mclose()"><div class="mb" id="mb"></div></div>
+<main id="app"></main><footer id="ft"></footer>
+<script src="data.js"></script><script>
+const D=window.GK_DATA||{notes:[],questions:[],editorials:[],groups:{},lenses:{},gd:[],static:[],static_questions:[]};
+const $=i=>document.getElementById(i),G=Object.keys(D.groups),g2={};
+G.forEach(k=>D.groups[k].forEach(s=>g2[s]=k));
+const grp=n=>g2[n.sector]||'Other',COL=['#38bdf8','#a78bfa','#34d399','#f59e0b','#f472b6','#60a5fa','#fb7185','#2dd4bf','#94a3b8'];
+const col=k=>COL[Math.max(0,G.indexOf(k))%COL.length];
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+let B=new Set(JSON.parse(ls.get('gk_bm')||'[]'));
+const R={High:3,Medium:2,Low:1},S={sort:'prio',view:'today',day:null,sec:null,per:null,lens:'',imp:'',q:'',open:new Set(),qz:null,cfg:{sec:'All',pk:'all',pv:'',n:10}};
+D.notes.sort((a,b)=>b.day.localeCompare(a.day)||b.id-a.id);
+const days=()=>[...new Set([...D.notes.map(n=>n.day),...D.editorials.map(e=>e.day)])].sort().reverse();
+const dt=(d,o)=>new Date(d+'T00:00:00').toLocaleDateString('en-IN',o);
+const fmt=t=>t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+const wk=d=>{const t=new Date(d+'T00:00:00');t.setDate(t.getDate()-(t.getDay()+6)%7);return fmt(t)};
+const pkey=(d,k)=>k==='weekly'?wk(d):d.slice(0,7);
+const plabel=(v,k)=>k==='weekly'?'Week of '+dt(v,{day:'numeric',month:'short',year:'numeric'}):dt(v+'-01',{month:'long',year:'numeric'});
+const inLens=n=>!S.lens||n.lenses.includes(S.lens)||((D.lenses[S.lens]||{}).sectors||[]).includes(n.sector);
+const fil=n=>inLens(n)&&(!S.imp||n.importance===S.imp)&&(!S.q||(n.headline+' '+n.bullets.join(' ')).toLowerCase().includes(S.q.toLowerCase()));
+const edOK=e=>!S.lens||!e.lenses.length||e.lenses.includes(S.lens);
+const chip=(t,v,l)=>`<span class="chip ${S[t]===v?'on':''}" onclick="S.${t}='${v}';render()">${esc(l)}</span>`;
+const bar=()=>'';
+const srt=a=>S.sort==='new'?a:[...a].sort((x,y)=>R[y.importance]-R[x.importance]);
+const empty=()=>'<div class="panel"><h2>Nothing published yet</h2><p class="mu">Approve notes in the admin dashboard, then run <code>python run.py build-site</code> and refresh this page.</p></div>';
+function md(s){return esc(s).split(/\n{2,}/).map(p=>/^\s*[-*] /.test(p)?'<ul>'+p.split('\n').map(l=>'<li>'+l.replace(/^\s*[-*] /,'')+'</li>').join('')+'</ul>':'<p>'+p.replace(/\n/g,'<br>')+'</p>').join('').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')}
+function card(n){const o=S.open.has(n.id),lp=Object.entries(n.lens_points||{}).filter(([k])=>!S.lens||k===S.lens),lb=k=>(D.lenses[k]||{}).label||k;
+return `<article class="card"><div class="top"><div><h3>${esc(n.headline)}</h3><div class="sub">${dt(n.day,{day:'numeric',month:'short',year:'numeric'})}${n.reported&&/^\d{4}-\d\d-\d\d$/.test(n.reported)?` · <span style="color:var(--am)">reported ${dt(n.reported,{day:'numeric',month:'short'})}</span>`:''}</div></div><div class="rt"><button class="star ${B.has(n.id)?'on':''}" onclick="bm(${n.id})">★</button><div class="badge"><b class="${n.importance}">${n.importance}</b><br>priority</div></div></div>
+<div class="tags">${n.lenses.slice(0,3).map(k=>`<span class="pill">${esc(lb(k))}</span>`).join('')}${n.facts.length?`<span class="pill n">${n.facts.length} verified facts</span>`:''}</div>
+<ul>${n.bullets.slice(0,o?99:2).map(b=>`<li>${esc(b)}</li>`).join('')}</ul><div class="row"><span>Section</span><b>${esc(grp(n))}</b></div>`+
+(o?`<div class="more">${n.exam_angle?`<p><b>Exam angle:</b> ${esc(n.exam_angle)}</p>`:''}${lp.map(([k,v])=>`<p><b>${esc(lb(k))}:</b> ${esc(v)}</p>`).join('')}${n.static_links.length?`<p><b>Static links:</b> ${n.static_links.map(esc).join('; ')}</p>`:''}<p>${n.sources.map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener">Source</a>`).join(' · ')}</p></div>`:'')+
+`<button class="open" onclick="tog(${n.id})">${o?'Hide details':'Read exam notes →'}</button></article>`}
+const edBlock=e=>`<section class="ed"><span class="tag" style="--c:#f59e0b">Editorial</span><h3>${esc(e.title)}</h3><div class="body">${md(e.body_md)}</div><div class="by">${esc(e.author)} · ${dt(e.day,{day:'numeric',month:'long',year:'numeric'})}</div></section>`;
+const tog=id=>{S.open.has(id)?S.open.delete(id):S.open.add(id);render()};
+const bm=id=>{B.has(id)?B.delete(id):B.add(id);ls.set('gk_bm',JSON.stringify([...B]));push();render()};
+function vToday(){const dl=days();if(!dl.length)return empty();if(!S.day||!dl.includes(S.day))S.day=dl[0];
+const ns=srt(D.notes.filter(n=>n.day===S.day&&fil(n))),eds=D.editorials.filter(e=>e.day===S.day&&edOK(e));
+return `<h2>${dt(S.day,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}<small>${ns.length} notes</small></h2><div class="days">${dl.slice(0,14).map(d=>`<span class="chip ${d===S.day?'on':''}" onclick="S.day='${d}';render()">${dt(d,{day:'numeric',month:'short'})}</span>`).join('')}</div>${bar()}${eds.map(edBlock).join('')}<div class="grid">${ns.map(card).join('')||'<p class="mu">No notes match these filters.</p>'}</div>`}
+function vSec(){const ns=D.notes.filter(n=>grp(n)===S.sec&&fil(n)).slice(0,80);let h=`<h2>${esc(S.sec)}<small>${ns.length} notes</small></h2>${bar()}`,last='';
+ns.forEach(n=>{if(n.day!==last){h+=(last?'</div>':'')+`<h4 class="dh">${dt(n.day,{weekday:'long',day:'numeric',month:'long'})}</h4><div class="grid">`;last=n.day}h+=card(n)});
+return ns.length?h+'</div>':h+'<p class="mu">No notes in this section yet.</p>'}
+function vPer(k){const keys=[...new Set(D.notes.map(n=>pkey(n.day,k)))].sort().reverse();if(!keys.length)return empty();
+if(!S.per||!keys.includes(S.per))S.per=keys[0];const ns=D.notes.filter(n=>pkey(n.day,k)===S.per&&fil(n)),eds=D.editorials.filter(e=>pkey(e.day,k)===S.per&&edOK(e));
+const must=ns.filter(n=>n.importance==='High'),nq=D.questions.filter(q=>pkey(q.day,k)===S.per).length,facts=ns.flatMap(n=>n.facts.map(f=>[f.k,f.t,n.day])).slice(0,40);
+let h=`<h2>${k==='weekly'?'Weekly wrap':'Monthly compilation'}<small>${plabel(S.per,k)}</small></h2><div class="days">${keys.slice(0,12).map(x=>`<span class="chip ${x===S.per?'on':''}" onclick="S.per='${x}';render()">${plabel(x,k).replace('Week of ','')}</span>`).join('')}</div>${bar()}
+<div class="stats"><div class="stat"><b>${ns.length}</b><span>notes</span></div><div class="stat"><b>${must.length}</b><span>must-remember</span></div><div class="stat"><b>${nq}</b><span>practice questions</span></div><div class="stat"><button class="btn" onclick="quizPer('${k}')">Take this period's test</button></div></div>${eds.map(edBlock).join('')}`;
+if(must.length)h+=`<div class="must"><b>Must remember</b><ul>${must.map(n=>`<li>${esc(n.headline)} <span class="mu">(${grp(n)})</span></li>`).join('')}</ul></div>`;
+G.forEach(g=>{const x=ns.filter(n=>grp(n)===g);if(x.length)h+=`<h4 class="dh">${esc(g)}</h4><div class="grid">${x.map(card).join('')}</div>`});
+if(facts.length)h+=`<h4 class="dh">Verified facts</h4><div class="panel" style="max-width:none"><table><tr><th>Type</th><th>Fact</th><th>Date</th></tr>${facts.map(f=>`<tr><td>${esc(f[0])}</td><td>${esc(f[1])}</td><td>${f[2]}</td></tr>`).join('')}</table></div>`;
+return h}
+const gdCard=t=>`<article class="card"><div><h3>${esc(t.topic)}</h3><div class="sub">${dt(t.day,{day:'numeric',month:'short',year:'numeric'})} · ${esc(t.sector)}</div></div><p class="mu" style="margin:0">${esc(t.context)}</p><div class="cmp"><div><b class="pf">For</b><ul>${t.for_points.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div><div><b class="pa">Against</b><ul>${t.against_points.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>${t.key_facts.length?`<div class="tags">${t.key_facts.map(f=>`<span class="pill">${esc(f)}</span>`).join('')}</div>`:''}<div class="more"><p><b>Open with:</b> ${esc(t.opening)}</p><p><b>Close with:</b> ${esc(t.conclusion)}</p></div></article>`;
+const vGD=()=>`<h2>GD topics<small>${D.gd.length}</small></h2><p class="mu">Debate-ready topics for group discussions and interviews: points for and against, facts to quote, and how to open and close.</p><div class="grid gd">${D.gd.map(gdCard).join('')||'<p class="mu">No GD topics yet.</p>'}</div>`;
+const lab=k=>k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+const catsOf=k=>(D.static||[]).filter(c=>c.kind===k&&c.items.length);
+const filt=q=>{q=q.toLowerCase();document.querySelectorAll('#app [data-s]').forEach(e=>{e.style.display=(!q||e.dataset.s.includes(q))?'':'none'})};
+const hay=i=>esc(Object.values(i.data).join(' ').toLowerCase());
+const pickCat=(cs,key)=>{if(!S[key]||!cs.find(c=>c.slug===S[key]))S[key]=cs[0].slug;return cs.find(c=>c.slug===S[key])};
+const chips=(cs,key,cur)=>cs.length>1?`<div class="days">${cs.map(x=>`<span class="chip ${x.slug===cur?'on':''}" onclick="S.${key}='${x.slug}';render()">${esc(x.name)}</span>`).join('')}</div>`:'';
+function glossBody(c,ch){const its=[...c.items].sort((a,b)=>a.data.term.localeCompare(b.data.term)),row=(l,v)=>v?`<p><b>${l}:</b> ${esc(v)}</p>`:'';
+return `<h2>${esc(c.name)}<small>${its.length} terms</small></h2>${ch}<p><input id="sq" type="search" placeholder="Search terms..." oninput="filt(this.value)" style="width:min(420px,100%)"> <button class="btn g" onclick="quizStatic('${c.slug}')">Quiz me on ${esc(c.name)}</button></p>
+<div class="grid">${its.map(i=>{const d=i.data;return `<article class="card" data-s="${hay(i)}"><h3>${esc(d.term)}</h3><p style="margin:0">${esc(d.definition)}</p><div class="more" style="display:block">${row('Example',d.example)}${d.formula?`<p><b>Formula:</b> <code>${esc(d.formula)}</code></p>`:''}${row('Why it matters',d.why_it_matters)}${d.current_value?`<p><b>Current value:</b> ${esc(d.current_value)} <span class="mu">(as on ${esc(i.as_on)}${i.source?` · <a href="${esc(i.source)}" target="_blank" rel="noopener" style="color:var(--am)">source</a>`:''})</span></p>`:''}</div>${d.related?`<div class="tags">${d.related.split(',').map(x=>`<span class="pill n">${esc(x.trim())}</span>`).join('')}</div>`:''}</article>`}).join('')}</div>`}
+const num=v=>{v=String(v||'').trim();if(!v)return null;if(/^\d{4}$/.test(v)&&+v>=1700&&+v<=2200)return Date.UTC(+v,0,1);if(/^-?\d+(\.\d+)?$/.test(v))return +v;const t=Date.parse(v);if(!isNaN(t))return t;const y=v.match(/(1[789]\d\d|20\d\d)/);if(y)return Date.UTC(+y[1],0,1);const m=v.match(/-?\d+(\.\d+)?/);return m?+m[0]:null};
+function sorted(c){const s=(S.srt||{})[c.slug]||c.sort;if(!s)return c.items;const d=s.dir==='asc'?1:-1,vals=c.items.map(i=>num(i.data[s.col])),isNum=vals.filter(x=>x!==null).length>=c.items.length*.6;
+return [...c.items].sort((a,b)=>{const x=a.data[s.col]||'',y=b.data[s.col]||'';if(isNum){const p=num(x),q=num(y);if(p===null&&q===null)return 0;if(p===null)return 1;if(q===null)return -1;return (p-q)*d}return x.localeCompare(y)*d})}
+function sortBy(slug,col){S.srt=S.srt||{};const c=D.static.find(x=>x.slug===slug),cur=S.srt[slug]||c.sort||{};S.srt[slug]={col,dir:cur.col===col&&cur.dir==='asc'?'desc':'asc'};render()}
+function setTf(slug,v){S.tf=S.tf||{};S.tf[slug]=decodeURIComponent(v);render()}
+function tableBody(c,ch){const s=(S.srt||{})[c.slug]||c.sort||{},arrow=k=>s.col===k?(s.dir==='asc'?' ▲':' ▼'):'',fc=c.filter,fv=(S.tf||{})[c.slug]||'';
+const fch=fc?`<div class="days">${['',...new Set(c.items.map(i=>i.data[fc]).filter(Boolean))].map(v=>`<span class="chip ${v===fv?'on':''}" onclick="setTf('${c.slug}','${encodeURIComponent(v)}')">${esc(v||'All '+lab(fc)+'s')}</span>`).join('')}</div>`:'';
+return `<h2>Static GK<small>${c.items.length} entries in ${esc(c.name)}</small></h2>${ch}${fch}<p><input id="sq" type="search" placeholder="Search ${esc(c.name)}..." oninput="filt(this.value)" style="width:min(420px,100%)"> <button class="btn g" onclick="quizStatic('${c.slug}')">Quiz me on ${esc(c.name)}</button></p>
+<div class="panel" style="overflow-x:auto"><table><tr>${c.columns.map(k=>`<th class="sr" onclick="sortBy('${c.slug}','${k}')" title="Click to sort">${esc(lab(k))}${arrow(k)}</th>`).join('')}<th>As on</th></tr>${sorted(c).filter(i=>!fv||i.data[fc]===fv).map(i=>`<tr data-s="${hay(i)}">${c.columns.map(k=>`<td>${esc(i.data[k]||'')}</td>`).join('')}<td class="mu">${esc(i.as_on||'')}${i.volatility==='volatile'?' ⚠':''}</td></tr>`).join('')}</table></div><p class="mu">${c.sort?'Newest first. ':''}Click a column heading to sort. ⚠ = changes often: confirm from the official source.</p>`}
+function vStatic(){const cs=catsOf('table');if(!cs.length)return `<h2>Static GK</h2><div class="panel"><p class="mu">No approved tables yet (countries, states, committees and so on).</p>${catsOf('glossary').length?'<p>Banking terms are in the <a href="#" onclick="go(\'terms\');return false" style="color:var(--am)">Banking Terms</a> tab.</p>':''}</div>`;const c=pickCat(cs,'sc');return tableBody(c,chips(cs,'sc',c.slug))}
+function vTerms(){const cs=catsOf('glossary');if(!cs.length)return `<h2>Banking Terms</h2><div class="panel"><p class="mu">No approved terms yet.</p></div>`;const c=pickCat(cs,'tc');return glossBody(c,chips(cs,'tc',c.slug))}
+function quizStatic(slug){const c=D.static.find(x=>x.slug===slug);S.cfg={...S.cfg,sec:'Static GK: '+c.name,pk:'all',pv:''};S.qz=null;go('tests','keep')}
+const vEd=()=>{const e=D.editorials.filter(edOK);return `<h2>Editorials<small>${e.length}</small></h2>${e.map(edBlock).join('')||'<p class="mu">No editorials yet.</p>'}`};
+const vSaved=()=>{const ns=D.notes.filter(n=>B.has(n.id));return `<h2>Saved<small>${ns.length}</small></h2><div class="grid">${ns.map(card).join('')||'<p class="mu">Tap the star on any card to save it here.</p>'}</div>`};
+const vSearch=()=>{const ns=D.notes.filter(fil).slice(0,60);return `<h2>Search<small>${ns.length} results for "${esc(S.q)}"</small></h2><div class="grid">${ns.map(card).join('')}</div>`};
+function pool(){const c=S.cfg;if(c.sec.startsWith('Static GK: '))return D.static_questions.filter(q=>q.cat===c.sec.slice(11));return D.questions.filter(q=>(c.sec==='All'||(g2[q.sector]||'Other')===c.sec)&&(c.pk==='all'||pkey(q.day,c.pk)===c.pv))}
+function qzSetup(){const c=S.cfg,wks=[...new Set(D.notes.map(n=>wk(n.day)))].sort().reverse().slice(0,4),mos=[...new Set(D.notes.map(n=>n.day.slice(0,7)))].sort().reverse().slice(0,3),cur=c.pk==='all'?'all':c.pk+':'+c.pv;
+const hist=JSON.parse(ls.get('gk_hist')||'[]');
+return `<h2>Tests</h2><div class="panel"><label>Section</label><select onchange="S.cfg.sec=this.value;render()"><option>All</option>${G.map(g=>`<option ${g===c.sec?'selected':''}>${esc(g)}</option>`).join('')}${[...new Set((D.static_questions||[]).map(q=>q.cat))].map(n=>{const v='Static GK: '+n;return `<option ${v===c.sec?'selected':''}>${esc(v)}</option>`}).join('')}</select>
+<label>Period</label><select onchange="const v=this.value.split(':');S.cfg.pk=v[0];S.cfg.pv=v[1]||'';render()"><option value="all">All time</option>${wks.map(w=>`<option value="weekly:${w}" ${cur==='weekly:'+w?'selected':''}>${plabel(w,'weekly')}</option>`).join('')}${mos.map(m=>`<option value="monthly:${m}" ${cur==='monthly:'+m?'selected':''}>${plabel(m,'monthly')}</option>`).join('')}</select>
+<label>Questions</label><select onchange="S.cfg.n=+this.value">${[5,10,20].map(n=>`<option ${n===c.n?'selected':''}>${n}</option>`).join('')}</select>
+<p class="mu">${pool().length} questions available for this selection.</p><button class="btn" onclick="startQz()" ${pool().length?'':'disabled'}>Start test</button></div>
+${hist.length?`<h4 class="dh">Recent scores</h4><div class="panel">${hist.map(h=>`<div>${esc(h.d)} · ${esc(h.s)} · <b>${h.k}/${h.t}</b></div>`).join('')}</div>`:''}`}
+function startQz(){const items=pool().map(q=>[Math.random(),q]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]).slice(0,S.cfg.n);S.qz={items,i:0,sel:null,score:0,wrong:[]};render()}
+function qzQ(){const z=S.qz,q=z.items[z.i];
+return `<h2>Question ${z.i+1} of ${z.items.length}<small>${esc(q.cat||g2[q.sector]||'Other')}</small></h2><div class="prog"><i style="width:${z.i/z.items.length*100}%"></i></div><div class="panel"><h3>${esc(q.q)}</h3>${q.options.map((o,i)=>`<button class="opt ${z.sel==null?'':i===q.answer?'ok':i===z.sel?'bad':''}" onclick="pick(${i})">${String.fromCharCode(65+i)}. ${esc(o)}</button>`).join('')}
+${z.sel!=null?`<div class="expl"><b>${z.sel===q.answer?'Correct.':'Not quite.'}</b> ${esc(q.explanation)}</div><button class="btn" onclick="S.qz.i++;S.qz.sel=null;render()">${z.i+1<z.items.length?'Next question':'See result'}</button>`:''}</div>`}
+function pick(i){const z=S.qz,q=z.items[z.i];if(z.sel!=null)return;z.sel=i;i===q.answer?z.score++:z.wrong.push(q);render()}
+function qzResult(){const z=S.qz,t=z.items.length,p=Math.round(z.score/t*100);
+if(!z.saved){z.saved=1;const h=JSON.parse(ls.get('gk_hist')||'[]');h.unshift({d:new Date().toLocaleDateString('en-IN'),s:S.cfg.sec,k:z.score,t});ls.set('gk_hist',JSON.stringify(h.slice(0,8)));push()}
+return `<h2>Result</h2><div class="stats"><div class="stat"><b>${z.score}/${t}</b><span>score</span></div><div class="stat"><b>${p}%</b><span>accuracy</span></div></div><p><button class="btn" onclick="startQz()">Retake</button> <button class="btn g" onclick="S.qz=null;render()">New test</button></p>
+${z.wrong.length?`<h4 class="dh">Review these</h4>${z.wrong.map(q=>`<div class="panel" style="margin-bottom:12px"><b>${esc(q.q)}</b><p class="mu">Answer: ${esc(q.options[q.answer])}</p><p>${esc(q.explanation)}</p></div>`).join('')}`:'<p>Perfect score. Nicely done.</p>'}`}
+const vTests=()=>S.qz?(S.qz.i>=S.qz.items.length?qzResult():qzQ()):qzSetup();
+function quizSec(i){S.cfg={...S.cfg,sec:G[i],pk:'all',pv:''};S.qz=null;go('tests','keep')}
+function quizPer(k){S.cfg={...S.cfg,sec:'All',pk:k,pv:S.per};S.qz=null;go('tests','keep')}
+function go(v,a){S.view=v;if(v==='sec')S.sec=G[a];S.per=null;if(v==='tests'&&a!=='keep')S.qz=null;$('q').value='';S.q='';scrollTo(0,0);render()}
+function srch(v){S.q=v;if(v&&S.view!=='search'){S.v0=S.view;S.view='search'}else if(!v&&S.view==='search')S.view=S.v0||'today';render()}
+const side=()=>{const sv=S.view,per=sv==='weekly'||sv==='monthly',act=sv==='sec'?`quizSec(${G.indexOf(S.sec)})`:per?`quizPer('${sv}')`:`go('tests')`,lab=sv==='sec'?'Take a test on this section':per?"Take this period's test":'Start a test';
+const opts=(a,cur)=>a.map(o=>`<option value="${o[0]}" ${cur===o[0]?'selected':''}>${esc(o[1])}</option>`).join('');
+return `<aside><label>Exam</label><select onchange="S.lens=this.value;render()">${opts([['','All exams'],...Object.keys(D.lenses).map(k=>[k,D.lenses[k].label])],S.lens)}</select><label>Priority</label><select onchange="S.imp=this.value;render()">${opts([['','Any priority'],['High','High'],['Medium','Medium']],S.imp)}</select><label>Sort (Today view)</label><select onchange="S.sort=this.value;render()">${opts([['prio','Priority first'],['new','Newest first']],S.sort)}</select><button class="go" onclick="${act}">${lab}</button><p class="side-note">Use a card's button for the exam angle, exam-specific points and sources.</p></aside>`};
+function render(){const sec=G.map((k,i)=>`<a class="${S.view==='sec'&&S.sec===k?'on':''}" onclick="go('sec',${i})">${esc(k)}</a>`).join(''),M=[['weekly','Weekly'],['monthly','Monthly'],['gd','GD Topics'],['static','Static GK'],['terms','Banking Terms'],['tests','Tests'],['editorial','Editorial'],['saved','★ Saved']];
+$('nav').innerHTML=`<a class="${S.view==='today'?'on':''}" onclick="go('today')">Today</a>${sec}<i></i>`+M.map(m=>`<a class="${S.view===m[0]?'on':''}" onclick="go('${m[0]}')">${m[1]}</a>`).join('');
+const v=({today:vToday,sec:vSec,weekly:()=>vPer('weekly'),monthly:()=>vPer('monthly'),tests:vTests,gd:vGD,static:vStatic,terms:vTerms,editorial:vEd,saved:vSaved,search:vSearch}[S.view])();
+$('app').innerHTML=S.view==='tests'?`<div class="single">${v}</div>`:['gd','static','terms'].includes(S.view)?`<section class="main">${v}</section>`:`<div class="lay">${side()}<section class="main">${v}</section></div>`;
+$('ft').textContent='Updated '+(D.generated||'')+' · '+D.notes.length+' notes · '+D.questions.length+' questions'}
+let ME=null,CFG={},AUTH=false,GL=0;
+const jf=async(p,b)=>{const r=await fetch(p,{method:b?'POST':'GET',headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined,credentials:'same-origin'});return r.json()};
+const push=()=>{if(ME)jf('/api/state',{bookmarks:[...B],hist:JSON.parse(ls.get('gk_hist')||'[]')}).catch(()=>{})};
+async function pull(){const s=await jf('/api/state');if(s.bookmarks){B=new Set([...B,...s.bookmarks]);ls.set('gk_bm',JSON.stringify([...B]))}if(s.hist&&s.hist.length)ls.set('gk_hist',JSON.stringify(s.hist));push();render()}
+function acct(){$('acct').innerHTML=!AUTH?'':ME?`<button class="btn g" onclick="modal('account')">${esc(ME.name||'Account')}</button>`:`<button class="btn" onclick="modal('login')">Log in / Sign up</button>`}
+const inp=(id,l,t)=>`<label>${l}</label><input type="${t||'text'}" id="${id}" autocomplete="off">`;
+const AGES=['Under 18','18-24','25+'].map(a=>`<option>${a}</option>`).join('');
+const exams=()=>`<label>Target exams (optional)</label>${Object.keys(D.lenses).map(k=>`<label class="ck"><input type="checkbox" class="ex" value="${k}"> ${esc(D.lenses[k].label)}</label>`).join('')}`;
+const consent=()=>`<label class="ck"><input type="checkbox" id="cn"> I agree to the <a href="/privacy.html" target="_blank">privacy policy</a></label>`;
+const gbox=()=>CFG.googleClientId?'<p class="mu" style="text-align:center;margin:14px 0 8px">or</p><div id="gbtn"></div>':'';
+const picked=()=>[...document.querySelectorAll('.ex:checked')].map(x=>x.value);
+function modal(k){const M={
+login:`<h2>Welcome back</h2>${inp('e','Email','email')}${inp('p','Password','password')}<button class="go" onclick="doLogin()">Log in</button><div class="err" id="err"></div>${gbox()}<p class="mu">New here? <a href="#" onclick="modal('signup');return false">Create an account</a></p>`,
+signup:`<h2>Create your account</h2>${inp('n','Name or nickname')}${inp('e','Email','email')}${inp('p','Password (8+ characters)','password')}<label>Age</label><select id="a">${AGES}</select>${exams()}${consent()}<button class="go" onclick="doSignup()">Create account</button><div class="err" id="err"></div>${gbox()}<p class="mu">Already registered? <a href="#" onclick="modal('login');return false">Log in</a></p>`,
+profile:`<h2>One last step</h2><p class="mu">Tell us a little so we can personalise your feed.</p><label>Age</label><select id="a">${AGES}</select>${exams()}${consent()}<button class="go" onclick="doProfile()">Continue</button><div class="err" id="err"></div>`,
+account:ME?`<h2>${esc(ME.name)}</h2><p class="mu">${esc(ME.email)} · plan: ${esc(ME.plan)}</p><p><a href="/auth/export" target="_blank">Download my data</a></p><button class="btn g" onclick="doLogout()">Log out</button> <button class="btn r" style="background:#3b1414;color:var(--bd)" onclick="doDelete()">Delete my account</button><div class="err" id="err"></div><p><a href="#" onclick="mclose();return false">Close</a></p>`:''}[k];
+$('mb').innerHTML=M;$('ov').classList.add('on');
+if(CFG.googleClientId&&$('gbtn')){const go=()=>{google.accounts.id.initialize({client_id:CFG.googleClientId,callback:r=>doGoogle(r.credential)});google.accounts.id.renderButton($('gbtn'),{theme:'filled_black',size:'large',width:340})};
+if(window.google&&google.accounts)go();else if(!GL){GL=1;const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.onload=go;document.head.appendChild(s)}}}
+const mclose=()=>$('ov').classList.remove('on');
+async function done(r){if(r.error){$('err').textContent=r.error;return}ME=r.user;mclose();acct();await pull();if(ME&&!ME.profile_complete)modal('profile')}
+const v=i=>$(i).value;
+const doLogin=async()=>done(await jf('/auth/login',{email:v('e'),password:v('p')}));
+const doSignup=async()=>done(await jf('/auth/signup',{name:v('n'),email:v('e'),password:v('p'),age_band:v('a'),exams:picked(),consent:$('cn').checked}));
+const doGoogle=async c=>done(await jf('/auth/google',{credential:c}));
+const doProfile=async()=>done(await jf('/auth/profile',{age_band:v('a'),exams:picked(),consent:$('cn').checked}));
+async function doLogout(){await jf('/auth/logout',{});ME=null;mclose();acct()}
+async function doDelete(){if(confirm('Delete your account and saved data permanently?')){await jf('/auth/delete',{confirm:true});ME=null;mclose();acct()}}
+async function initAuth(){try{CFG=await jf('/auth/config');if(!('googleClientId' in CFG))throw 0;ME=(await jf('/auth/me')).user;AUTH=true}catch(e){AUTH=false}acct();if(ME){await pull();if(!ME.profile_complete)modal('profile')}}
+render();initAuth();
+</script></body></html>

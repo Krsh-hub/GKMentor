@@ -1,0 +1,11 @@
+{
+  "id": "appointment_demo",
+  "title": "Demo Person appointed chairperson of Demo Regulatory Authority",
+  "article": "Demo Person has been appointed chairperson of the Demo Regulatory Authority for a term of three years. The government announced the appointment on Tuesday. Demo Person succeeds Former Person, who retired last month. The authority regulates the demo sector in India.",
+  "expected_facts": [
+    "Demo Person",
+    "three years",
+    "Former Person",
+    "Demo Regulatory Authority"
+  ]
+}

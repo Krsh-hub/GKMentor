@@ -1,0 +1,7 @@
+# Exam lenses: one shared news/facts core, a thin exam-specific view on top.
+# style: analytical (bullets + exam angle + static links) | factual (quick facts + MCQs) | discussion (short + discussion point)
+lenses:
+  UPSC_PSC:    {label: "UPSC / State PSC",               style: analytical, max_bullets: 7, sectors: [Polity, IR, Environment, S&T, Schemes, Economy, Reports&Indices]}
+  SSC_BANKING: {label: "SSC / Railways / Banking",       style: factual,    max_facts: 6,   sectors: [Banking, Economy, Awards, Sports, Appointments, Schemes, Reports&Indices, Polity]}
+  DEFENCE:     {label: "Defence (NDA / CDS)",            style: analytical, max_bullets: 5, sectors: [Defence, S&T, IR]}
+  MANAGEMENT:  {label: "Management / business awareness", style: discussion,  max_bullets: 3, sectors: [Economy, Banking, Business, Reports&Indices, Schemes]}

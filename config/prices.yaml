@@ -1,0 +1,7 @@
+# Estimated cost = tokens used x these prices. USD per 1 million tokens: [input, output].
+# Prices change often: CHECK Google's pricing page (ai.google.dev/gemini-api/docs/pricing) and edit here.
+# On the FREE tier you pay nothing; the estimate shows what the same usage would cost on a paid plan.
+usd_inr: 90          # ASSUMED exchange rate (Rs per USD). Update it, or set the GK_USD_INR environment variable.
+models:
+  gemini-3.5-flash: [1.50, 9.00]
+  gemini-3.5-flash-lite: [0.30, 2.50]

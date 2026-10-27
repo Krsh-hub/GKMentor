@@ -1,0 +1,11 @@
+{
+  "id": "index_demo",
+  "title": "India ranked 45th in Demo Global Index 2026",
+  "article": "India has been ranked 45 out of 120 countries in the Demo Global Index 2026. The index is published by the Demo Institute in Geneva. India scored 61.2 points, up from 58.9 points last year. Country A topped the index with a score of 80.4.",
+  "expected_facts": [
+    "45 out of 120",
+    "Demo Institute",
+    "61.2",
+    "Country A"
+  ]
+}

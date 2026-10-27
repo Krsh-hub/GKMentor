@@ -1,0 +1,28 @@
+# Source registry. tier: 1 = official (truth), 2 = quality media (context), 3 = aggregator (discovery only).
+# VERIFY every feed URL before relying on it: feed URLs change. Set enabled: false for any that fail.
+sources:
+  # PIB: the feed URL below returned malformed data ("mismatched tag"), so it is OFF. Find the current RSS link on pib.gov.in,
+  # open it in a browser (it must show XML), paste it as rss: and set enabled: true.
+  - {id: pib, name: Press Information Bureau, tier: 1, rss: "https://pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=3", enabled: false, fulltext: false, categories: [Polity, Economy, Schemes, S&T, Defence]}
+  - {id: rbi_press, name: RBI Press Releases, tier: 1, rss: "https://rbi.org.in/pressreleases_rss.xml", enabled: true, fulltext: false, categories: [Economy, Banking]}
+  - {id: the_hindu_national, name: The Hindu - National, tier: 2, rss: "https://www.thehindu.com/news/national/feeder/default.rss", enabled: true, fulltext: false, categories: [National, Polity]}
+  - {id: indian_express_explained, name: Indian Express - Explained, tier: 2, rss: "https://indianexpress.com/section/explained/feed/", enabled: true, fulltext: false, categories: [Explained]}
+  - {id: business_standard, name: Business Standard, tier: 2, rss: "", enabled: false, fulltext: false, categories: [Economy, Business]}
+  - {id: google_news_india, name: Google News India, tier: 3, rss: "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en", enabled: true, fulltext: false, categories: [General]}
+  # Topic feeds (discovery): make sure sections like Economy, Awards, Science and Reports get stories.
+  - {id: gn_rbi, name: "Google News - RBI and monetary policy", tier: 3, rss: "https://news.google.com/rss/search?q=RBI+monetary+policy+OR+repo+rate&hl=en-IN&gl=IN&ceid=IN:en", enabled: true, fulltext: false, categories: [Economy, Banking]}
+  - {id: gn_awards, name: "Google News - Awards and prizes", tier: 3, rss: "https://news.google.com/rss/search?q=Nobel+Prize+OR+Booker+Prize+OR+Padma+OR+Bharat+Ratna&hl=en-IN&gl=IN&ceid=IN:en", enabled: true, fulltext: false, categories: [Awards]}
+  - {id: gn_science, name: "Google News - Science and space", tier: 3, rss: "https://news.google.com/rss/search?q=ISRO+OR+DRDO+OR+space+mission+OR+science+breakthrough+India&hl=en-IN&gl=IN&ceid=IN:en", enabled: true, fulltext: false, categories: [S&T]}
+  - {id: gn_reports, name: "Google News - Reports and indices", tier: 3, rss: "https://news.google.com/rss/search?q=India+ranks+index+OR+India+ranking+report+released&hl=en-IN&gl=IN&ceid=IN:en", enabled: true, fulltext: false, categories: [Reports&Indices]}
+  - {id: gn_business, name: "Google News - Business and corporate", tier: 3, rss: "https://news.google.com/rss/search?q=India+merger+OR+acquisition+OR+IPO+OR+SEBI+OR+corporate+earnings+OR+startup+funding&hl=en-IN&gl=IN&ceid=IN:en", enabled: true, fulltext: false, categories: [Business]}
+  - {id: gn_polity, name: "Google News - Polity and governance", tier: 3, rss: "https://news.google.com/rss/search?q=Supreme+Court+OR+Parliament+OR+Election+Commission+OR+constitution+OR+bill+passed+India&hl=en-IN&gl=IN&ceid=IN:en", enabled: true, fulltext: false, categories: [Polity]}
+  - {id: gn_ir, name: "Google News - International relations", tier: 3, rss: "https://news.google.com/rss/search?q=India+foreign+ministry+OR+bilateral+talks+OR+summit+OR+treaty+OR+UN+India&hl=en-IN&gl=IN&ceid=IN:en", enabled: true, fulltext: false, categories: [IR]}
+  - {id: gn_environment, name: "Google News - Environment", tier: 3, rss: "https://news.google.com/rss/search?q=India+climate+OR+pollution+OR+wildlife+OR+renewable+energy+OR+biodiversity&hl=en-IN&gl=IN&ceid=IN:en", enabled: true, fulltext: false, categories: [Environment]}
+  - {id: gn_defence, name: "Google News - Defence", tier: 3, rss: "https://news.google.com/rss/search?q=Indian+Army+OR+Indian+Navy+OR+Indian+Air+Force+OR+DRDO+OR+defence+ministry&hl=en-IN&gl=IN&ceid=IN:en", enabled: true, fulltext: false, categories: [Defence]}
+  # Add: MEA, Parliament, SC judgments, SEBI, NITI Aayog, MoSPI, ISRO, DRDO, UN/IMF/World Bank report pages, BSE/NSE announcements...
+
+# The "avoid" list as a code-level filter
+avoid_keywords: [celebrity, bollywood gossip, murder, robbery, horoscope, box office]
+
+# Exam lenses: every note is tagged with the ones it suits.
+lenses: [UPSC_PSC, SSC_BANKING, DEFENCE, MANAGEMENT]

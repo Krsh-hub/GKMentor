@@ -1,0 +1,5 @@
+sources:
+  - {id: pib_demo, name: PIB (demo), tier: 1, rss: "data/demo/pib.xml", enabled: true}
+  - {id: hindu_demo, name: The Hindu (demo), tier: 2, rss: "data/demo/hindu.xml", enabled: true}
+avoid_keywords: [celebrity, bollywood gossip, murder]
+lenses: [UPSC_PSC, SSC_BANKING, DEFENCE, MANAGEMENT]

@@ -2,6 +2,18 @@ import os, yaml
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# Load .env file if present
+_env_path = ROOT / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text(encoding="utf-8").splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            _k, _v = _k.strip(), _v.strip().strip("'\"")
+            if _k and _k not in os.environ:
+                os.environ[_k] = _v
+
 DB_PATH = os.getenv("GK_DB", str(ROOT / "gk.db"))
 OUT_DIR = Path(os.getenv("GK_OUT", str(ROOT / "out")))
 PROMPT_VERSION = "v1"

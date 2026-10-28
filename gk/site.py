@@ -20,8 +20,7 @@ GROUPS = {
 }
 PUB = "('approved','auto_published')"
 
-def build_site(con, out="site", title="GK Daily"):
-    out = Path(out); out.mkdir(parents=True, exist_ok=True)
+def build_site_data(con):
     notes = []
     for n in con.execute(f"SELECT * FROM notes WHERE status IN {PUB} ORDER BY day DESC, id DESC"):
         b = json.loads(n["body_json"])
@@ -55,8 +54,12 @@ def build_site(con, out="site", title="GK Daily"):
                           items=[dict(id=i["id"], data=i["data"], as_on=i["as_on"], volatility=i["volatility"], source=i["source"] if str(i["source"]).startswith("http") else "") for i in items]))
         squestions += static.build_questions(c, items)
     lenses = {k: {"label": v["label"], "sectors": v.get("sectors", [])} for k, v in config.load_lenses().items()}
-    data = dict(generated=datetime.now().strftime("%d %b %Y, %H:%M"), groups=GROUPS, lenses=lenses,
+    return dict(generated=datetime.now().strftime("%d %b %Y, %H:%M"), groups=GROUPS, lenses=lenses,
                 notes=notes, questions=qs, editorials=eds, gd=gd, static=scats, static_questions=squestions)
+
+def build_site(con, out="site", title="GK Daily"):
+    out = Path(out); out.mkdir(parents=True, exist_ok=True)
+    data = build_site_data(con)
     (out / "data.js").write_text("window.GK_DATA=" + json.dumps(data, ensure_ascii=False) + ";", encoding="utf-8")
     html = (Path(__file__).with_name("site_template.html")).read_text(encoding="utf-8").replace("__TITLE__", title)
     (out / "index.html").write_text(html, encoding="utf-8")
@@ -64,4 +67,5 @@ def build_site(con, out="site", title="GK Daily"):
     from .users import POLICY
     (out / "privacy.html").write_text((Path(__file__).with_name("privacy_template.html")).read_text(encoding="utf-8")
                                       .replace("__POLICY__", POLICY).replace("__CONTACT__", os.getenv("GK_CONTACT_EMAIL", "Add your contact email (GK_CONTACT_EMAIL).")), encoding="utf-8")
-    return out / "index.html", len(notes), len(qs), len(eds)
+    return out / "index.html", len(data["notes"]), len(data["questions"]), len(data["editorials"])
+

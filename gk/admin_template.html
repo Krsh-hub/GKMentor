@@ -8,7 +8,7 @@ textarea{min-height:90px;resize:vertical}textarea:focus,input:focus{border-color
 .panel{margin-bottom:16px}.panel h3{margin:0 0 6px}.line{padding:6px 0;border-bottom:1px solid var(--ln);font-size:13px}.line a{color:var(--am);overflow-wrap:anywhere;word-break:break-all}.cols>div{min-width:0}
 .fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}.lens{display:inline-block;margin:4px 12px 4px 0;color:var(--mu);font-size:13px}.msg{color:var(--gn);margin-top:10px}
 </style></head><body>
-<header><div class="hd"><div><h1>GK Admin</h1><p>Review AI notes, write editorials and publish the website. Runs only on your computer.</p></div><a class="btn" href="/site/index.html" target="_blank">View site →</a></div><nav id="nav"></nav></header>
+<header><div class="hd"><div><h1>GK Admin</h1><p>Review AI notes, write editorials and manage GK content. Secured by GK_ADMIN_PASSWORD.</p></div><a class="btn" href="/" target="_blank">View live site →</a></div><nav id="nav"></nav></header>
 <main id="app"></main>
 <script>
 const $=i=>document.getElementById(i),esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -16,7 +16,7 @@ let KEY=sessionStorage.getItem('k')||'';const A={rates:[],sst:'pending',sc:[],si
 async function api(p,b,retry){const r=await fetch(p,{method:b?'POST':'GET',headers:{'Content-Type':'application/json','X-Admin-Key':KEY},body:b?JSON.stringify(b):undefined});
 if(r.status===401&&!retry){KEY=prompt('Admin password')||'';sessionStorage.setItem('k',KEY);return api(p,b,1)}return r.json()}
 const sel=(id,cur,opts,fn)=>`<select onchange="${fn}(this.value)">${opts.map(o=>`<option ${o===cur?'selected':''}>${o}</option>`).join('')}</select>`;
-const T=[['review','Review queue'],['gd','GD Topics'],['static','Static GK'],['editorials','Editorials'],['publish','Publish site']];
+const T=[['review','Review queue'],['gd','GD Topics'],['static','Static GK'],['editorials','Editorials'],['publish','Publish / Live Feeds']];
 function nav(){$('nav').innerHTML=T.map(t=>`<a class="${A.tab===t[0]?'on':''}" onclick="A.tab='${t[0]}';A.msg='';load()">${t[1]}</a>`).join('')}
 async function load(){nav();A.meta=await api('/api/meta');
 if(A.tab==='review'){A.notes=await api(`/api/notes?status=${A.status}&route=${A.route}`);}
@@ -51,8 +51,10 @@ if(r.error){A.msg=r.error}else{A.msg='Saved.';A.ed=null}A.eds=await api('/api/ed
 const editEd=id=>{A.ed=A.eds.find(x=>x.id===id);A.msg='';draw()};
 async function setEd(id,status){await api('/api/editorial',{action:'status',id,status});load()}
 async function delEd(id){if(confirm('Delete this editorial permanently?')){await api('/api/editorial',{action:'delete',id});A.ed=null;load()}}
-function vPub(){const m=A.meta.counts||{};return `<div class="single"><h2>Publish website</h2><div class="panel"><div class="stats"><div class="stat"><b>${m.approved||0}</b><span>approved notes</span></div><div class="stat"><b>${m.published_editorials||0}</b><span>published editorials</span></div><div class="stat"><b>${m.pending||0}</b><span>still pending</span></div></div>
-<p class="mu">The site updates automatically whenever you approve notes or publish editorials. Refresh the site tab to see changes. Use this button to force a rebuild. To test accounts and login, run <code>python run.py serve</code> and open <a href="http://localhost:5080" target="_blank">localhost:5080</a> (login does not work in this preview). To go live, upload the <code>site</code> folder to your web host.</p><div class="acts"><button class="btn" onclick="build()">Build website now</button><a class="btn g" href="/site/index.html" target="_blank">Open site →</a></div><div class="msg">${esc(A.msg)}</div></div></div>`}
+function vPub(){const m=A.meta.counts||{};return `<div class="single"><h2>Publish &amp; Feed Management</h2><div class="panel"><div class="stats"><div class="stat"><b>${m.approved||0}</b><span>approved notes</span></div><div class="stat"><b>${m.published_editorials||0}</b><span>published editorials</span></div><div class="stat"><b>${m.pending||0}</b><span>still pending</span></div></div>
+<p class="mu">The hosted app serves live content directly from the database to your Vercel frontend. Approving notes, adding static items, or publishing editorials reflects immediately. You can also trigger the daily pipeline right now to ingest and process today's news feeds from PIB, The Hindu, etc.</p>
+<div class="acts"><button class="btn" onclick="fetchDaily()">Trigger Today's News Feed Fetch</button><button class="btn g" onclick="build()">Export site bundle</button><a class="btn g" href="/" target="_blank">Open site →</a></div><div class="msg">${esc(A.msg)}</div></div></div>`}
+async function fetchDaily(){if(!confirm("Fetch and ingest today's feeds now? This can take 1-2 minutes depending on source volume.")){return}A.msg='Fetching daily feeds and running pipeline... please wait...';draw();const r=await api('/api/admin/fetch-daily',{});if(r.error){A.msg='Error: '+r.error}else{A.msg=`Fetch complete for ${r.day}. Check the Review Queue tab!`}load()}
 const lines=s=>s.split('\n').map(x=>x.trim()).filter(Boolean),setG=v=>{A.gst=v;load()};
 function gdCard(g){const i=g.id,ta=(k,l,v,r)=>`<label>${l}</label><textarea id="${k}${i}" rows="${r||3}">${esc(v)}</textarea>`;
 const rest=`${ta('gc','Context',g.context,2)}<div class="cols"><div>${ta('gf','For (one per line)',g.for_points.join('\n'),6)}</div><div>${ta('ga','Against (one per line)',g.against_points.join('\n'),6)}</div></div>${ta('gk','Key facts to quote (one per line)',g.key_facts.join('\n'),3)}${ta('go','Open with',g.opening,2)}${ta('gn','Close with',g.conclusion,2)}`;

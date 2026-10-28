@@ -117,6 +117,93 @@ def _post_static(con, path, d, llm_factory=None):
         rates.review(con, d["id"], d["action"]); return {"ok": True}
     raise ValueError("Unknown action.")
 
+def is_admin_authorized(headers):
+    pw = os.getenv("GK_ADMIN_PASSWORD")
+    if not pw:
+        host = (headers.get("Host") or "").split(":")[0]
+        return host in ("localhost", "127.0.0.1")
+    return headers.get("X-Admin-Key") == pw or headers.get("Authorization") == f"Bearer {pw}"
+
+def handle_get(con, path, query=""):
+    qs = parse_qs(query)
+    if path == "/api/meta":
+        c = {r[0]: r[1] for r in con.execute("SELECT status, COUNT(*) FROM notes GROUP BY status")}
+        c["published_editorials"] = con.execute("SELECT COUNT(*) FROM editorials WHERE status='published'").fetchone()[0]
+        return 200, {"lenses": {k: v["label"] for k, v in config.load_lenses().items()}, "counts": c}
+    if path == "/api/notes":
+        return 200, _notes(con, qs.get("status", ["pending"])[0], qs.get("route", ["all"])[0])
+    if path == "/api/static/cats":
+        cats = static.overview(con)
+        for c in cats:
+            c["hints"] = static_ai.HINTS.get(c["slug"], [])
+            c["knowledge_ok"] = c["slug"] not in static_ai.TEXT_ONLY and c["volatility"] != "volatile"
+        return 200, cats
+    if path == "/api/static/rates":
+        return 200, rates.list_updates(con)
+    if path == "/api/static/items":
+        try:
+            return 200, static.list_items(con, qs.get("cat", [""])[0], qs.get("status", [None])[0] or None)
+        except ValueError as ve:
+            return 400, {"error": str(ve)}
+    if path == "/api/static/due":
+        return 200, static.due_for_review(con)
+    if path == "/api/static/history":
+        return 200, static.history(con, int(qs.get("id", ["0"])[0]))
+    if path == "/api/gd":
+        return 200, _gd_list(con, qs.get("status", ["pending"])[0])
+    if path == "/api/editorials":
+        return 200, [dict(id=e["id"], title=e["title"], body_md=e["body_md"], day=e["day"], status=e["status"], source=e["source"], flags=e["flags"],
+                          lenses=[x for x in (e["lenses"] or "").split(",") if x])
+                     for e in con.execute("SELECT * FROM editorials ORDER BY day DESC, id DESC")]
+    return 404, {"error": "not found"}
+
+def handle_post(con, path, d, llm_factory=None):
+    if path == "/api/admin/fetch-daily":
+        from . import pipeline
+        today = date.today().isoformat()
+        try:
+            stats = pipeline.run_daily(today, con=con)
+            return 200, {"ok": True, "day": today, "stats": stats}
+        except Exception as e:
+            return 500, {"error": f"Daily fetch failed: {e}"}
+    if path == "/api/note":
+        return 200, _post_note(con, d)
+    if path == "/api/question":
+        con.execute("UPDATE questions SET status=? WHERE id=?", (d["status"], d["id"]))
+        con.commit()
+        return 200, {"ok": True}
+    if path == "/api/editorial":
+        return 200, _post_editorial(con, d)
+    if path == "/api/gd":
+        return 200, _post_gd(con, d)
+    if path.startswith("/api/static/"):
+        try:
+            return 200, _post_static(con, path, d, llm_factory)
+        except ValueError as ve:
+            return 400, {"error": str(ve)}
+    if path == "/api/gd/generate":
+        _l = (llm_factory or get_llm)()
+        made = gd_generate(con, _l, date.today().isoformat())
+        usage.log_usage(con, date.today().isoformat(), _l, "gd")
+        return 200, {"made": made}
+    if path == "/api/editorial/draft":
+        try:
+            _l = (llm_factory or get_llm)()
+            eid = draft_from_topic(con, _l, d.get("topic", ""), d.get("extra", ""))
+            usage.log_usage(con, date.today().isoformat(), _l, "editorial")
+            return 200, {"id": eid}
+        except ValueError as ve:
+            return 400, {"error": str(ve)}
+    if path == "/api/gd/from-topic":
+        try:
+            _l = (llm_factory or get_llm)()
+            gid = generate_for_topic(con, _l, d.get("topic", ""), d.get("extra", ""))
+            usage.log_usage(con, date.today().isoformat(), _l, "gd-topic")
+            return 200, {"id": gid}
+        except ValueError as ve:
+            return 400, {"error": str(ve)}
+    return 404, {"error": "not found"}
+
 def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
     site_dir = Path(site_dir or config.ROOT / "site").resolve()
     page = _page()
@@ -139,7 +226,7 @@ def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
             if (self.headers.get("Host") or "").split(":")[0] not in ("localhost", "127.0.0.1"):
                 self._send(403, {"error": "bad host"}); return False
             pw = os.getenv("GK_ADMIN_PASSWORD")
-            if api and pw and self.headers.get("X-Admin-Key") != pw:
+            if api and pw and self.headers.get("X-Admin-Key") != pw and self.headers.get("Authorization") != f"Bearer {pw}":
                 self._send(401, {"error": "password required"}); return False
             return True
         def do_GET(self):
@@ -148,36 +235,12 @@ def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
             con = db.connect(db_path)
             try:
                 if u.path == "/": return self._send(200, page, "text/html")
-                if u.path == "/api/meta":
-                    c = {r[0]: r[1] for r in con.execute("SELECT status, COUNT(*) FROM notes GROUP BY status")}
-                    c["published_editorials"] = con.execute("SELECT COUNT(*) FROM editorials WHERE status='published'").fetchone()[0]
-                    return self._send(200, {"lenses": {k: v["label"] for k, v in config.load_lenses().items()}, "counts": c})
-                if u.path == "/api/notes":
-                    qs = parse_qs(u.query)
-                    return self._send(200, _notes(con, qs.get("status", ["pending"])[0], qs.get("route", ["all"])[0]))
-                if u.path == "/api/static/cats":
-                    cats = static.overview(con)
-                    for c in cats:
-                        c["hints"] = static_ai.HINTS.get(c["slug"], []); c["knowledge_ok"] = c["slug"] not in static_ai.TEXT_ONLY and c["volatility"] != "volatile"
-                    return self._send(200, cats)
-                if u.path == "/api/static/rates": return self._send(200, rates.list_updates(con))
-                if u.path == "/api/static/items":
-                    q = parse_qs(u.query)
-                    try: return self._send(200, static.list_items(con, q.get("cat", [""])[0], q.get("status", [None])[0] or None))
-                    except ValueError as ve: return self._send(400, {"error": str(ve)})
-                if u.path == "/api/static/due": return self._send(200, static.due_for_review(con))
-                if u.path == "/api/static/history": return self._send(200, static.history(con, int(parse_qs(u.query).get("id", ["0"])[0])))
-                if u.path == "/api/gd":
-                    return self._send(200, _gd_list(con, parse_qs(u.query).get("status", ["pending"])[0]))
-                if u.path == "/api/editorials":
-                    return self._send(200, [dict(id=e["id"], title=e["title"], body_md=e["body_md"], day=e["day"], status=e["status"], source=e["source"], flags=e["flags"],
-                                                 lenses=[x for x in (e["lenses"] or "").split(",") if x])
-                                            for e in con.execute("SELECT * FROM editorials ORDER BY day DESC, id DESC")])
                 if u.path.startswith("/site/"):
                     f = (site_dir / (u.path[6:] or "index.html")).resolve()
                     if site_dir in f.parents and f.is_file():
                         return self._send(200, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream")
-                self._send(404, {"error": "not found"})
+                code, resp = handle_get(con, u.path, u.query)
+                return self._send(code, resp)
             finally:
                 con.close()
         def do_POST(self):
@@ -186,43 +249,13 @@ def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
             con = db.connect(db_path)
             try:
                 d = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 500_000)) or b"{}")
-                if u.path == "/api/note":
-                    r = _post_note(con, d); _auto(con); return self._send(200, r)
-                if u.path == "/api/question":
-                    con.execute("UPDATE questions SET status=? WHERE id=?", (d["status"], d["id"])); con.commit()
-                    _auto(con); return self._send(200, {"ok": True})
-                if u.path == "/api/editorial":
-                    r = _post_editorial(con, d); _auto(con); return self._send(200, r)
-                if u.path == "/api/gd":
-                    r = _post_gd(con, d); _auto(con); return self._send(200, r)
-                if u.path.startswith("/api/static/"):
-                    try:
-                        r = _post_static(con, u.path, d, llm_factory)
-                    except ValueError as ve:
-                        return self._send(400, {"error": str(ve)})
-                    _auto(con); return self._send(200, r)
-                if u.path == "/api/gd/generate":
-                    _l = (llm_factory or get_llm)()
-                    made = gd_generate(con, _l, date.today().isoformat()); usage.log_usage(con, date.today().isoformat(), _l, "gd")
-                    return self._send(200, {"made": made})
-                if u.path == "/api/editorial/draft":
-                    try:
-                        _l = (llm_factory or get_llm)()
-                        eid = draft_from_topic(con, _l, d.get("topic", ""), d.get("extra", "")); usage.log_usage(con, date.today().isoformat(), _l, "editorial")
-                    except ValueError as ve:
-                        return self._send(400, {"error": str(ve)})
-                    return self._send(200, {"id": eid})
-                if u.path == "/api/gd/from-topic":
-                    try:
-                        _l = (llm_factory or get_llm)()
-                        gid = generate_for_topic(con, _l, d.get("topic", ""), d.get("extra", "")); usage.log_usage(con, date.today().isoformat(), _l, "gd-topic")
-                    except ValueError as ve:
-                        return self._send(400, {"error": str(ve)})
-                    return self._send(200, {"id": gid})
                 if u.path == "/api/build":
                     _, n, q, e = build_site(con, site_dir)
                     return self._send(200, {"notes": n, "questions": q, "editorials": e})
-                self._send(404, {"error": "not found"})
+                code, resp = handle_post(con, u.path, d, llm_factory)
+                if code == 200:
+                    _auto(con)
+                return self._send(code, resp)
             except Exception as ex:
                 print(f"[admin] ERROR {u.path}: {ex}", file=sys.stderr, flush=True)
                 traceback.print_exc(file=sys.stderr)

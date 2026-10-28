@@ -68,9 +68,42 @@ def connect(path=None):
     # housekeeping: purge expired sessions (cheap, runs once per connect)
     con.execute("DELETE FROM sessions WHERE expires < ?", (time.time(),))
     con.commit()
+    if path is None:
+        seed_if_empty(con)
     return con
+
+def seed_if_empty(con):
+    try:
+        if con.execute("SELECT COUNT(*) FROM notes").fetchone()[0] == 0:
+            from . import static
+            static.seed_starter(con)
+            data_file = config.ROOT / "site/data.js"
+            if data_file.exists():
+                import json
+                raw = data_file.read_text(encoding="utf-8")
+                data = json.loads(raw.replace("window.GK_DATA=", "").rstrip(";"))
+                for n in data.get("notes", []):
+                    bj = json.dumps({"bullets": n.get("bullets", []), "exam_angle": n.get("exam_angle", ""), "static_links": n.get("static_links", []), "lens_points": n.get("lens_points", {})})
+                    con.execute("INSERT OR IGNORE INTO notes(id, day, sector, headline, body_json, importance, lenses, status, source_urls) VALUES(?,?,?,?,?,?,?,'approved',?)",
+                                (n["id"], n["day"], n["sector"], n["headline"], bj, n.get("importance", "Medium"), ",".join(n.get("lenses", [])), json.dumps(n.get("sources", []))))
+                    for f in n.get("facts", []):
+                        con.execute("INSERT INTO claims(note_id, text, kind, grounded) VALUES(?,?,?,1)", (n["id"], f.get("t", ""), f.get("k", "")))
+                for q in data.get("questions", []):
+                    bj = json.dumps({"question": q["q"], "options": q["options"], "answer_index": q["answer"], "explanation": q.get("explanation", ""), "difficulty": q.get("difficulty", "medium")})
+                    con.execute("INSERT OR IGNORE INTO questions(id, note_id, body_json, valid, solver_ok, status) VALUES(?,?,?,1,1,'approved')",
+                                (q["id"], q.get("id", 1), bj))
+                for e in data.get("editorials", []):
+                    con.execute("INSERT OR IGNORE INTO editorials(id, day, title, body_md, author, lenses, status) VALUES(?,?,?,?,?,?,'published')",
+                                (e["id"], e["day"], e["title"], e["body_md"], e.get("author", "admin"), ",".join(e.get("lenses", []))))
+                for g in data.get("gd", []):
+                    con.execute("INSERT OR IGNORE INTO gd_topics(id, day, sector, topic, context, for_json, against_json, facts_json, opening, conclusion, status) VALUES(?,?,?,?,?,?,?,?,?,?,'approved')",
+                                (g["id"], g["day"], g["sector"], g["topic"], g["context"], json.dumps(g.get("for_points", [])), json.dumps(g.get("against_points", [])), json.dumps(g.get("key_facts", [])), g.get("opening", ""), g.get("conclusion", "")))
+                con.commit()
+    except Exception:
+        pass
 
 def log(con, day, stage, detail):
     con.execute("INSERT INTO runs(day,stage,detail) VALUES(?,?,?)", (day, stage, str(detail)))
     con.commit()
+
 

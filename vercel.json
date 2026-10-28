@@ -11,6 +11,14 @@
     {
       "source": "/api/:path*",
       "destination": "https://gkmentor.onrender.com/api/:path*"
+    },
+    {
+      "source": "/admin",
+      "destination": "https://gkmentor.onrender.com/admin"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "https://gkmentor.onrender.com/admin/:path*"
     }
   ]
 }

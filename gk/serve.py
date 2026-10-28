@@ -4,9 +4,10 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
-from . import db, users, config
+from . import db, users, config, admin, site
 
 _MAX_POST_BODY = 20_000                     # 20 KB cap on POST body to prevent abuse
+_MAX_ADMIN_BODY = 500_000                   # 500 KB cap on admin POST body (e.g. text/drafts/imports)
 
 def make_public_server(port=5080, host="127.0.0.1", db_path=None, site_dir=None, verifier=users.google_verifier):
     site_dir = Path(site_dir or config.ROOT / "site").resolve()
@@ -56,13 +57,22 @@ def make_public_server(port=5080, host="127.0.0.1", db_path=None, site_dir=None,
                 self.send_header("Access-Control-Allow-Origin", o)
                 self.send_header("Access-Control-Allow-Credentials", "true")
                 self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-                self.send_header("Access-Control-Allow-Headers", "Content-Type, Cookie")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type, Cookie, X-Admin-Key, Authorization")
             self.end_headers()
         def do_GET(self):
             u = urlparse(self.path); con = db.connect(db_path)
             try:
                 if u.path == "/auth/config": return self._send(200, {"googleClientId": client_id})
                 if u.path == "/auth/me": return self._send(200, {"user": users.public(users.user_for(con, self._tok()))})
+                if u.path == "/api/content":
+                    return self._send(200, site.build_site_data(con))
+                if u.path in ("/admin", "/admin/"):
+                    return self._send(200, raw=admin._page().encode("utf-8"), ctype="text/html")
+                if u.path.startswith(("/api/admin/", "/api/static/")) or u.path in ("/api/meta", "/api/notes", "/api/gd", "/api/editorials"):
+                    if not admin.is_admin_authorized(self.headers):
+                        return self._send(401, {"error": "password required"})
+                    code, resp = admin.handle_get(con, u.path, u.query)
+                    return self._send(code, resp)
                 if u.path in ("/api/state", "/auth/export"):
                     me = users.user_for(con, self._tok())
                     if not me: return self._send(401, {"error": "Log in first."})
@@ -77,7 +87,19 @@ def make_public_server(port=5080, host="127.0.0.1", db_path=None, site_dir=None,
             if not self._origin_ok(): return self._send(403, {"error": "Bad request origin."})
             con = db.connect(db_path)
             try:
-                d = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), _MAX_POST_BODY)) or b"{}")
+                is_admin_call = u.path.startswith(("/api/admin/", "/api/static/")) or u.path in ("/api/note", "/api/question", "/api/editorial", "/api/gd", "/api/build")
+                body_limit = _MAX_ADMIN_BODY if is_admin_call else _MAX_POST_BODY
+                d = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), body_limit)) or b"{}")
+
+                if is_admin_call:
+                    if not admin.is_admin_authorized(self.headers):
+                        return self._send(401, {"error": "password required"})
+                    if u.path == "/api/build":
+                        _, n, q, e = site.build_site(con, site_dir)
+                        return self._send(200, {"notes": n, "questions": q, "editorials": e})
+                    code, resp = admin.handle_post(con, u.path, d)
+                    return self._send(code, resp)
+
                 if u.path in ("/auth/signup", "/auth/login", "/auth/google"):
                     r = (users.signup(con, d, valid) if u.path == "/auth/signup" else users.login(con, d.get("email"), d.get("password"))
                          if u.path == "/auth/login" else users.google_login(con, d.get("credential"), client_id, verifier))

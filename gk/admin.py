@@ -1,12 +1,12 @@
 """Local admin web app (no Streamlit). Standard library only. Binds to 127.0.0.1.
 Set GK_ADMIN_PASSWORD to require a password for every API call."""
-import json, os, re, sys, traceback, webbrowser, mimetypes
+import hmac, json, os, re, sys, traceback, webbrowser, mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from . import db, editorial, config
 from .site import build_site
-from . import usage, static, rates, static_ai
+from . import usage, static, rates, static_ai, jobs
 from .gd import generate as gd_generate, generate_for_topic
 from .editorial import draft_from_topic
 from .llm import get_llm
@@ -117,15 +117,27 @@ def _post_static(con, path, d, llm_factory=None):
         rates.review(con, d["id"], d["action"]); return {"ok": True}
     raise ValueError("Unknown action.")
 
-def is_admin_authorized(headers):
+def _eq(a, b):
+    return hmac.compare_digest((a or "").encode(), (b or "").encode())
+
+def is_admin_authorized(headers, peer=None):
+    """With GK_ADMIN_PASSWORD set, the X-Admin-Key header (or 'Authorization: Bearer <password>') must match.
+    Without it, only requests from this machine are allowed. `peer` is the real socket address: the Host header alone can be forged."""
     pw = os.getenv("GK_ADMIN_PASSWORD")
     if not pw:
         host = (headers.get("Host") or "").split(":")[0]
-        return host in ("localhost", "127.0.0.1")
-    return headers.get("X-Admin-Key") == pw or headers.get("Authorization") == f"Bearer {pw}"
+        local_peer = peer is None or peer in ("127.0.0.1", "::1")
+        return host in ("localhost", "127.0.0.1") and local_peer and not headers.get("X-Forwarded-For")
+    auth = headers.get("Authorization") or ""
+    return _eq(headers.get("X-Admin-Key"), pw) or (auth.startswith("Bearer ") and _eq(auth[7:], pw))
 
-def handle_get(con, path, query=""):
+def handle_get(con, path, query="", ctx=None):
     qs = parse_qs(query)
+    if path == "/api/admin/jobs":
+        return 200, jobs.overview(con)
+    if path.startswith("/api/admin/jobs/"):
+        j = jobs.get(con, int(path.rsplit("/", 1)[1]) if path.rsplit("/", 1)[1].isdigit() else 0)
+        return (200, j) if j else (404, {"error": "no such job"})
     if path == "/api/meta":
         c = {r[0]: r[1] for r in con.execute("SELECT status, COUNT(*) FROM notes GROUP BY status")}
         c["published_editorials"] = con.execute("SELECT COUNT(*) FROM editorials WHERE status='published'").fetchone()[0]
@@ -157,15 +169,15 @@ def handle_get(con, path, query=""):
                      for e in con.execute("SELECT * FROM editorials ORDER BY day DESC, id DESC")]
     return 404, {"error": "not found"}
 
-def handle_post(con, path, d, llm_factory=None):
-    if path == "/api/admin/fetch-daily":
-        from . import pipeline
-        today = date.today().isoformat()
-        try:
-            stats = pipeline.run_daily(today, con=con)
-            return 200, {"ok": True, "day": today, "stats": stats}
-        except Exception as e:
-            return 500, {"error": f"Daily fetch failed: {e}"}
+def handle_post(con, path, d, llm_factory=None, ctx=None):
+    if path in ("/api/admin/jobs", "/api/admin/fetch-daily"):
+        # long runs happen in a background thread; the page polls /api/admin/jobs/<id> for the log
+        kind = "daily" if path.endswith("fetch-daily") else d.get("kind", "")
+        params = {k: v for k, v in (d.get("params") or {}).items() if k in ("day", "calls")}
+        if params.get("day") and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(params["day"])): return 400, {"error": "Day must be YYYY-MM-DD."}
+        c = dict(ctx or {}); c.setdefault("llm_factory", llm_factory)
+        jid, err = jobs.start(kind, params, c)
+        return (409, {"error": err}) if err else (202, {"id": jid, "day": params.get("day") or jobs.today()})
     if path == "/api/note":
         return 200, _post_note(con, d)
     if path == "/api/question":
@@ -207,6 +219,8 @@ def handle_post(con, path, d, llm_factory=None):
 def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
     site_dir = Path(site_dir or config.ROOT / "site").resolve()
     page = _page()
+    ctx = {"db_path": db_path, "site_dir": site_dir, "llm_factory": llm_factory}
+    _c = db.connect(db_path); jobs.recover(_c); _c.close()
 
     def _auto(con):
         """Keep the public site in sync with every admin change (no separate publish step needed)."""
@@ -226,7 +240,7 @@ def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
             if (self.headers.get("Host") or "").split(":")[0] not in ("localhost", "127.0.0.1"):
                 self._send(403, {"error": "bad host"}); return False
             pw = os.getenv("GK_ADMIN_PASSWORD")
-            if api and pw and self.headers.get("X-Admin-Key") != pw and self.headers.get("Authorization") != f"Bearer {pw}":
+            if api and pw and not is_admin_authorized(self.headers):
                 self._send(401, {"error": "password required"}); return False
             return True
         def do_GET(self):
@@ -239,7 +253,7 @@ def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
                     f = (site_dir / (u.path[6:] or "index.html")).resolve()
                     if site_dir in f.parents and f.is_file():
                         return self._send(200, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream")
-                code, resp = handle_get(con, u.path, u.query)
+                code, resp = handle_get(con, u.path, u.query, ctx)
                 return self._send(code, resp)
             finally:
                 con.close()
@@ -252,7 +266,7 @@ def make_server(port=5050, db_path=None, site_dir=None, llm_factory=None):
                 if u.path == "/api/build":
                     _, n, q, e = build_site(con, site_dir)
                     return self._send(200, {"notes": n, "questions": q, "editorials": e})
-                code, resp = handle_post(con, u.path, d, llm_factory)
+                code, resp = handle_post(con, u.path, d, llm_factory, ctx)
                 if code == 200:
                     _auto(con)
                 return self._send(code, resp)

@@ -168,10 +168,14 @@ const consent=()=>`<label class="ck"><input type="checkbox" id="cn"> I agree to 
 const gbox=()=>CFG.googleClientId?'<p class="mu" style="text-align:center;margin:14px 0 8px">or</p><div id="gbtn"></div>':'';
 const picked=()=>[...document.querySelectorAll('.ex:checked')].map(x=>x.value);
 function modal(k){const M={
-login:`<h2>Welcome back</h2>${inp('e','Email','email')}${inp('p','Password','password')}<button class="go" onclick="doLogin()">Log in</button><div class="err" id="err"></div>${gbox()}<p class="mu">New here? <a href="#" onclick="modal('signup');return false">Create an account</a></p>`,
+login:`<h2>Welcome back</h2>${inp('e','Email','email')}${inp('p','Password','password')}<button class="go" onclick="doLogin()">Log in</button><div class="err" id="err"></div><p class="mu" style="margin:6px 0 0"><a href="#" onclick="modal('forgot');return false">Forgot password?</a></p>${gbox()}<p class="mu">New here? <a href="#" onclick="modal('signup');return false">Create an account</a></p>`,
+forgot:`<h2>Reset your password</h2><p class="mu">Enter your account email. We'll send a link to choose a new password (it works for 1 hour). Signed up with Google? This also lets you add a password.</p>${inp('e','Email','email')}<button class="go" onclick="doForgot()">Email me a reset link</button><div class="err" id="err"></div><p class="mu"><a href="#" onclick="modal('login');return false">Back to log in</a></p>`,
+reset:`<h2>Choose a new password</h2>${inp('p','New password (8+ characters)','password')}${inp('p2','Repeat new password','password')}<button class="go" onclick="doReset()">Save password and log in</button><div class="err" id="err"></div>`,
+note:`<h2>${esc(NOTE.t)}</h2><p class="mu">${esc(NOTE.m)}</p><button class="go" onclick="mclose()">OK</button>`,
 signup:`<h2>Create your account</h2>${inp('n','Name or nickname')}${inp('e','Email','email')}${inp('p','Password (8+ characters)','password')}<label>Age</label><select id="a">${AGES}</select>${exams()}${consent()}<button class="go" onclick="doSignup()">Create account</button><div class="err" id="err"></div>${gbox()}<p class="mu">Already registered? <a href="#" onclick="modal('login');return false">Log in</a></p>`,
 profile:`<h2>One last step</h2><p class="mu">Tell us a little so we can personalise your feed.</p><label>Age</label><select id="a">${AGES}</select>${exams()}${consent()}<button class="go" onclick="doProfile()">Continue</button><div class="err" id="err"></div>`,
-account:ME?`<h2>${esc(ME.name)}</h2><p class="mu">${esc(ME.email)} · plan: ${esc(ME.plan)}</p><p><a href="/auth/export" target="_blank">Download my data</a></p><button class="btn g" onclick="doLogout()">Log out</button> <button class="btn r" style="background:#3b1414;color:var(--bd)" onclick="doDelete()">Delete my account</button><div class="err" id="err"></div><p><a href="#" onclick="mclose();return false">Close</a></p>`:''}[k];
+account:ME?`<h2>${esc(ME.name)}</h2><p class="mu">${esc(ME.email)} · plan: ${esc(ME.plan)}</p>${ME.email_verified?'':`<div class="panel" style="border-color:var(--am);padding:12px;margin:10px 0"><b>Please confirm your email.</b><p class="mu" style="margin:6px 0">We sent a link to ${esc(ME.email)}. Check spam too. Confirming lets you reset your password if you forget it.</p><button class="btn" onclick="doResend()">Resend link</button><div class="err" id="verr"></div></div>`}
+<details style="margin:10px 0"><summary class="mu" style="cursor:pointer">${ME.has_password?'Change password':'Add a password'}</summary>${ME.has_password?inp('op','Current password','password'):''}${inp('np','New password (8+ characters)','password')}<button class="btn" style="margin-top:10px" onclick="doChangePw()">Save password</button><div class="err" id="perr"></div></details><p><a href="/auth/export" target="_blank">Download my data</a></p><button class="btn g" onclick="doLogout()">Log out</button> <button class="btn r" style="background:#3b1414;color:var(--bd)" onclick="doDelete()">Delete my account</button><div class="err" id="err"></div><p><a href="#" onclick="mclose();return false">Close</a></p>`:''}[k];
 $('mb').innerHTML=M;$('ov').classList.add('on');
 if(CFG.googleClientId&&$('gbtn')){const go=()=>{google.accounts.id.initialize({client_id:CFG.googleClientId,callback:r=>doGoogle(r.credential)});google.accounts.id.renderButton($('gbtn'),{theme:'filled_black',size:'large',width:340})};
 if(window.google&&google.accounts)go();else if(!GL){GL=1;const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.onload=go;document.head.appendChild(s)}}}
@@ -179,11 +183,25 @@ const mclose=()=>$('ov').classList.remove('on');
 async function done(r){if(r.error){$('err').textContent=r.error;return}ME=r.user;mclose();acct();await pull();if(ME&&!ME.profile_complete)modal('profile')}
 const v=i=>$(i).value;
 const doLogin=async()=>done(await jf('/auth/login',{email:v('e'),password:v('p')}));
-const doSignup=async()=>done(await jf('/auth/signup',{name:v('n'),email:v('e'),password:v('p'),age_band:v('a'),exams:picked(),consent:$('cn').checked}));
+async function doSignup(){const r=await jf('/auth/signup',{name:v('n'),email:v('e'),password:v('p'),age_band:v('a'),exams:picked(),consent:$('cn').checked});await done(r);if(!r.error&&ME&&ME.profile_complete)note('Check your inbox',`We sent a confirmation link to ${ME.email}. You can use the site right away.`)}
+let NOTE={t:'',m:''},RTOK='';const note=(t,m)=>{NOTE={t,m};modal('note')};
+async function doForgot(){const e=v('e').trim();if(!e){$('err').textContent='Enter your email.';return}const r=await jf('/auth/forgot',{email:e});if(r.error){$('err').textContent=r.error;return}note('Check your inbox',`If an account exists for ${e}, a reset link is on its way. It works for 1 hour. Check your spam folder too.`)}
+async function doReset(){if(v('p')!==v('p2')){$('err').textContent='The two passwords do not match.';return}const r=await jf('/auth/reset',{token:RTOK,password:v('p')});if(!r.error)RTOK='';await done(r);if(!r.error)note('Password saved','You are logged in. Other devices have been signed out.')}
+async function doResend(){const r=await jf('/auth/resend-verification',{});$('verr').textContent=r.error||(r.already?'Already confirmed.':'Sent. Check your inbox.')}
+async function doChangePw(){const r=await jf('/auth/password',{old_password:ME.has_password?v('op'):'',new_password:v('np')});if(r.error){$('perr').textContent=r.error;return}ME.has_password=true;$('perr').textContent='Saved. Other devices were signed out.'}
 const doGoogle=async c=>done(await jf('/auth/google',{credential:c}));
 const doProfile=async()=>done(await jf('/auth/profile',{age_band:v('a'),exams:picked(),consent:$('cn').checked}));
 async function doLogout(){await jf('/auth/logout',{});ME=null;mclose();acct()}
 async function doDelete(){if(confirm('Delete your account and saved data permanently?')){await jf('/auth/delete',{confirm:true});ME=null;mclose();acct()}}
-async function initAuth(){try{CFG=await jf('/auth/config');if(!('googleClientId' in CFG))throw 0;ME=(await jf('/auth/me')).user;AUTH=true}catch(e){AUTH=false}acct();if(ME){await pull();if(!ME.profile_complete)modal('profile')}}
-render();initAuth();
+async function initAuth(){try{CFG=await jf('/auth/config');if(!('googleClientId' in CFG))throw 0;ME=(await jf('/auth/me')).user;AUTH=true}catch(e){AUTH=false}acct();if(ME){await pull();if(!ME.profile_complete&&!$('ov').classList.contains('on'))modal('profile')}}
+// Content: data.js (bundled with the site) shows instantly; then the live database replaces it if it has newer content.
+async function live(){try{const r=await fetch('/api/content',{credentials:'same-origin'});if(!r.ok)return;const x=await r.json();if(!x||!Array.isArray(x.notes))return;
+const sig=o=>[o.notes.length,o.questions.length,o.editorials.length,(o.gd||[]).length,(o.static||[]).reduce((a,c)=>a+c.items.length,0),o.notes[0]&&o.notes[0].id,o.notes[0]&&o.notes[0].headline].join('|');
+if(sig(x)!==sig(D)){Object.assign(D,x);render()}}catch(e){}}
+function urlFlags(){const q=new URLSearchParams(location.search);let shown=false;
+if(q.has('reset')){RTOK=q.get('reset');modal('reset');shown=true}
+else if(q.get('verified')==='1'){note('Email confirmed','Thanks! Your email address is confirmed.');shown=true}
+else if(q.get('verified')==='0'){note('Link expired','That confirmation link is invalid or has expired. Log in and use "Resend link" in your account.');shown=true}
+if(q.has('reset')||q.has('verified'))history.replaceState(null,'',location.pathname+location.hash);return shown}
+render();urlFlags();initAuth();if(location.protocol!=='file:')live();
 </script></body></html>

@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS rate_updates(
   id INTEGER PRIMARY KEY, detected_at TEXT DEFAULT CURRENT_TIMESTAMP, rate_key TEXT, term TEXT, old_value TEXT, new_value TEXT,
   as_on TEXT, source_url TEXT, quote TEXT, status TEXT, reason TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS rate_seen(url TEXT PRIMARY KEY, seen_at TEXT DEFAULT CURRENT_TIMESTAMP, result TEXT);
+CREATE TABLE IF NOT EXISTS auth_tokens(
+  token_hash TEXT PRIMARY KEY, user_id INTEGER, kind TEXT, expires REAL, created REAL);
+CREATE TABLE IF NOT EXISTS jobs(
+  id INTEGER PRIMARY KEY, kind TEXT, params TEXT, status TEXT, started TEXT, finished TEXT, result TEXT, log TEXT);
 CREATE TABLE IF NOT EXISTS runs(
   id INTEGER PRIMARY KEY, day TEXT, stage TEXT, detail TEXT, created TEXT DEFAULT CURRENT_TIMESTAMP);
 """
@@ -63,20 +67,29 @@ def connect(path=None):
     for col in ("pub_day TEXT", "event_age INTEGER"):
         if col.split()[0] not in have:
             con.execute(f"ALTER TABLE articles ADD COLUMN {col}")
+    have = {r[1] for r in con.execute("PRAGMA table_info(users)")}
+    if "email_verified" not in have:
+        con.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+        con.execute("UPDATE users SET email_verified=1 WHERE google_sub IS NOT NULL")   # Google already verified these
     from . import static
     static.ensure_categories(con)
     # housekeeping: purge expired sessions (cheap, runs once per connect)
     con.execute("DELETE FROM sessions WHERE expires < ?", (time.time(),))
+    con.execute("DELETE FROM auth_tokens WHERE expires < ?", (time.time(),))
     con.commit()
     if path is None:
         seed_if_empty(con)
     return con
 
+def _note_for(con, q):
+    """Older data.js files have no note_id on questions: attach them to a note of the same day and sector."""
+    r = con.execute("SELECT id FROM notes WHERE day=? AND sector=? ORDER BY id LIMIT 1", (q.get("day"), q.get("sector"))).fetchone()
+    return r["id"] if r else None
+
 def seed_if_empty(con):
     try:
         if con.execute("SELECT COUNT(*) FROM notes").fetchone()[0] == 0:
             from . import static
-            static.seed_starter(con)
             data_file = config.ROOT / "site/data.js"
             if data_file.exists():
                 import json
@@ -91,16 +104,22 @@ def seed_if_empty(con):
                 for q in data.get("questions", []):
                     bj = json.dumps({"question": q["q"], "options": q["options"], "answer_index": q["answer"], "explanation": q.get("explanation", ""), "difficulty": q.get("difficulty", "medium")})
                     con.execute("INSERT OR IGNORE INTO questions(id, note_id, body_json, valid, solver_ok, status) VALUES(?,?,?,1,1,'approved')",
-                                (q["id"], q.get("id", 1), bj))
+                                (q["id"], q.get("note_id") or _note_for(con, q), bj))
                 for e in data.get("editorials", []):
                     con.execute("INSERT OR IGNORE INTO editorials(id, day, title, body_md, author, lenses, status) VALUES(?,?,?,?,?,?,'published')",
                                 (e["id"], e["day"], e["title"], e["body_md"], e.get("author", "admin"), ",".join(e.get("lenses", []))))
                 for g in data.get("gd", []):
                     con.execute("INSERT OR IGNORE INTO gd_topics(id, day, sector, topic, context, for_json, against_json, facts_json, opening, conclusion, status) VALUES(?,?,?,?,?,?,?,?,?,?,'approved')",
                                 (g["id"], g["day"], g["sector"], g["topic"], g["context"], json.dumps(g.get("for_points", [])), json.dumps(g.get("against_points", [])), json.dumps(g.get("key_facts", [])), g.get("opening", ""), g.get("conclusion", "")))
+                for c in data.get("static", []):                       # approved Static GK entries come back approved
+                    for it in c.get("items", []):
+                        try: static.add_item(con, c["slug"], it.get("data"), "approved", it.get("as_on"), it.get("source", ""), it.get("volatility"))
+                        except ValueError: pass                    # unknown category or already there
                 con.commit()
-    except Exception:
-        pass
+            static.seed_starter(con)                             # fills any gaps as pending; skips rows restored above
+    except Exception as e:
+        import sys
+        print(f"[db] seeding from site/data.js failed: {e}", file=sys.stderr)
 
 def log(con, day, stage, detail):
     con.execute("INSERT INTO runs(day,stage,detail) VALUES(?,?,?)", (day, stage, str(detail)))

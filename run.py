@@ -88,7 +88,8 @@ elif a.cmd == "users":
         print(f"  #{r['id']} {r['email']} | {r['name']} | {r['age_band']} | exams: {r['exams'] or '-'} | {r['plan']} | joined {r['created']} | last login {r['last_login'] or '-'}".encode("ascii", "replace").decode())
 elif a.cmd == "serve":
     from gk.serve import serve
-    serve(a.port or 5080, a.host)
+    import os
+    serve(a.port or int(os.getenv("PORT", "5080")), a.host)        # Render/Railway/Fly pass the port in $PORT
 elif a.cmd == "gd":
     from gk.gd import generate
     _llm = get_llm(mock=a.demo)

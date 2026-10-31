@@ -34,10 +34,10 @@ def build_site_data(con):
                           reported=(lambda r: r if r and r < n["day"] else None)(
                               con.execute("SELECT MIN(COALESCE(pub_day, fetched_on)) FROM articles WHERE cluster_id=?", (n["cluster_id"],)).fetchone()[0])))
     qs = []
-    for q in con.execute(f"SELECT q.id, q.body_json, n.day, n.sector FROM questions q JOIN notes n ON n.id=q.note_id "
+    for q in con.execute(f"SELECT q.id, q.note_id, q.body_json, n.day, n.sector FROM questions q JOIN notes n ON n.id=q.note_id "
                          f"WHERE q.status='approved' AND q.valid=1 AND n.status IN {PUB}"):
         m = json.loads(q["body_json"])
-        qs.append(dict(id=q["id"], day=q["day"], sector=q["sector"], q=m["question"], options=m["options"],
+        qs.append(dict(id=q["id"], note_id=q["note_id"], day=q["day"], sector=q["sector"], q=m["question"], options=m["options"],
                        answer=m["answer_index"], explanation=m["explanation"], difficulty=m.get("difficulty", "medium")))
     eds = [dict(id=e["id"], day=e["day"], title=e["title"], body_md=e["body_md"], author=e["author"],
                 lenses=[x for x in (e["lenses"] or "").split(",") if x])

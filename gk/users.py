@@ -1,5 +1,7 @@
-"""User accounts: email+password (scrypt-hashed) and Google sign-in. Standard library only (Google token check uses google-auth)."""
+"""User accounts: email+password (scrypt-hashed) and Google sign-in. Standard library only (Google token check uses google-auth).
+Email verification and password reset use single-use tokens; only their SHA-256 hash is stored."""
 import hashlib, hmac, json, re, secrets, time
+from . import mailer
 from datetime import datetime, timezone
 
 def _now():
@@ -10,6 +12,9 @@ AGE_BANDS = ("Under 18", "18-24", "25+")
 SESSION_DAYS = 30
 _LOCKOUT_SECS = 900                          # 15-minute lockout after too many failed logins
 _MAX_FAILS = 5                               # lock after this many failures
+VERIFY_SECS = 48 * 3600                      # email-confirmation link lifetime
+RESET_SECS = 3600                            # password-reset link lifetime
+RESEND_GAP = 60                              # at most one email of a kind per account per minute
 
 class _FailsTracker(dict):
     def clear(self):
@@ -40,7 +45,12 @@ def check_pw(pw, stored):
 
 def public(u):
     return None if not u else dict(id=u["id"], email=u["email"], name=u["name"], age_band=u["age_band"], exams=[x for x in (u["exams"] or "").split(",") if x],
-                                   plan=u["plan"], profile_complete=bool(u["consent_version"] and u["age_band"]))
+                                   plan=u["plan"], profile_complete=bool(u["consent_version"] and u["age_band"]),
+                                   email_verified=bool(_get(u, "email_verified")), has_password=bool(u["pw_hash"]))
+
+def _get(row, k, default=None):
+    try: return row[k]
+    except (IndexError, KeyError): return default
 
 def _clean_exams(exams, valid):
     return ",".join(x for x in (exams or []) if x in valid)
@@ -99,7 +109,7 @@ def signup(con, d, valid_exams=()):
     if not (1 <= len(name) <= 60): return {"error": "Enter a name or nickname (up to 60 characters)."}
     if d.get("age_band") not in AGE_BANDS: return {"error": "Choose your age band."}
     if not d.get("consent"): return {"error": "Please accept the privacy policy to continue."}
-    if con.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone(): return {"error": "This email is already registered. Try logging in."}
+    if con.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone(): return {"error": "This email is already registered. Try logging in, or use 'Forgot password'."}
     cur = con.execute("INSERT INTO users(email,name,pw_hash) VALUES(?,?,?)", (email, name, hash_pw(pw)))
     _consent(con, cur.lastrowid, d["age_band"], d.get("exams"), valid_exams); con.commit()
     return {"id": cur.lastrowid}
@@ -128,10 +138,17 @@ def google_login(con, credential, client_id, verifier=google_verifier):
     email = (info.get("email") or "").lower()
     if not email or not info.get("email_verified"): return {"error": "Your Google email is not verified."}
     u = con.execute("SELECT * FROM users WHERE google_sub=?", (info["sub"],)).fetchone() or con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+    if u and u["google_sub"] and u["google_sub"] != info["sub"]:
+        return {"error": "This email is linked to a different Google account."}
     if u:
-        con.execute("UPDATE users SET google_sub=?, last_login=? WHERE id=?", (info["sub"], _now(), u["id"])); uid = u["id"]
+        if not u["google_sub"] and u["pw_hash"] and not _get(u, "email_verified"):
+            # Someone signed up with this email but never proved they own it. Google just proved the real owner is here:
+            # drop that unverified password and its sessions so a squatter cannot keep access to the owner's account.
+            con.execute("UPDATE users SET pw_hash=NULL WHERE id=?", (u["id"],))
+            con.execute("DELETE FROM sessions WHERE user_id=?", (u["id"],))
+        con.execute("UPDATE users SET google_sub=?, email_verified=1, last_login=? WHERE id=?", (info["sub"], _now(), u["id"])); uid = u["id"]
     else:
-        uid = con.execute("INSERT INTO users(email,name,google_sub) VALUES(?,?,?)", (email, (info.get("name") or email.split("@")[0])[:60], info["sub"])).lastrowid
+        uid = con.execute("INSERT INTO users(email,name,google_sub,email_verified) VALUES(?,?,?,1)", (email, (info.get("name") or email.split("@")[0])[:60], info["sub"])).lastrowid
     con.commit()
     return {"id": uid}
 
@@ -176,7 +193,71 @@ def delete(con, uid):
     u = con.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
     if u:
         con.execute("DELETE FROM login_attempts WHERE email=?", (u["email"],))
-    for t, c in (("sessions", "user_id"), ("user_state", "user_id"), ("users", "id")):
+    for t, c in (("sessions", "user_id"), ("user_state", "user_id"), ("auth_tokens", "user_id"), ("users", "id")):
         con.execute(f"DELETE FROM {t} WHERE {c}=?", (uid,))
     con.commit()
 
+
+# ---------- email verification, password reset, password change ----------
+
+def _h(tok):
+    return hashlib.sha256((tok or "").encode()).hexdigest()
+
+def _issue(con, uid, kind, ttl):
+    """New single-use token of this kind (older ones of the same kind stop working). None if one was sent under a minute ago."""
+    last = con.execute("SELECT MAX(created) FROM auth_tokens WHERE user_id=? AND kind=?", (uid, kind)).fetchone()[0]
+    if last and time.time() - last < RESEND_GAP: return None
+    con.execute("DELETE FROM auth_tokens WHERE user_id=? AND kind=?", (uid, kind))
+    tok = secrets.token_urlsafe(32)
+    con.execute("INSERT INTO auth_tokens VALUES(?,?,?,?,?)", (_h(tok), uid, kind, time.time() + ttl, time.time())); con.commit()
+    return tok
+
+def _take(con, tok, kind):
+    """Consume a token: returns its user id, or None if unknown/expired/used."""
+    if not tok or len(tok) > 200: return None
+    r = con.execute("SELECT user_id FROM auth_tokens WHERE token_hash=? AND kind=? AND expires>?", (_h(tok), kind, time.time())).fetchone()
+    if not r: return None
+    con.execute("DELETE FROM auth_tokens WHERE user_id=? AND kind=?", (r["user_id"], kind)); con.commit()
+    return r["user_id"]
+
+def send_verification(con, uid, base_url):
+    u = con.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if not u: return {"error": "Account not found."}
+    if u["email_verified"]: return {"ok": True, "already": True}
+    tok = _issue(con, uid, "verify", VERIFY_SECS)
+    if not tok: return {"error": "A link was sent less than a minute ago. Check your inbox (and spam folder)."}
+    mailer.verification(u["email"], u["name"] or "there", f"{base_url}/auth/verify?token={tok}")
+    return {"ok": True}
+
+def verify_email(con, tok):
+    uid = _take(con, tok, "verify")
+    if uid: con.execute("UPDATE users SET email_verified=1 WHERE id=?", (uid,)); con.commit()
+    return uid
+
+def request_reset(con, email, base_url):
+    """Always answers the same way, so this cannot be used to find out who has an account."""
+    email = (email or "").strip().lower()
+    u = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone() if email else None
+    if u:
+        tok = _issue(con, u["id"], "reset", RESET_SECS)
+        if tok: mailer.reset(u["email"], f"{base_url}/?reset={tok}")
+    return {"ok": True}
+
+def reset_password(con, tok, pw):
+    if not (8 <= len(pw or "") <= 128): return {"error": "Password must be 8 to 128 characters."}
+    uid = _take(con, tok, "reset")
+    if not uid: return {"error": "This reset link is invalid or has expired. Ask for a new one."}
+    u = con.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
+    # the link reached their inbox, so the email is proven; every old session is signed out
+    con.execute("UPDATE users SET pw_hash=?, email_verified=1, last_login=? WHERE id=?", (hash_pw(pw), _now(), uid))
+    con.execute("DELETE FROM sessions WHERE user_id=?", (uid,)); con.commit()
+    _clear_fails(con, u["email"])
+    return {"id": uid}
+
+def change_password(con, uid, old, new):
+    u = con.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if u["pw_hash"] and not check_pw(old or "", u["pw_hash"]): return {"error": "Your current password is wrong."}
+    if not (8 <= len(new or "") <= 128): return {"error": "New password must be 8 to 128 characters."}
+    con.execute("UPDATE users SET pw_hash=? WHERE id=?", (hash_pw(new), uid))
+    con.execute("DELETE FROM sessions WHERE user_id=?", (uid,)); con.commit()   # caller issues a fresh session for this device
+    return {"id": uid}

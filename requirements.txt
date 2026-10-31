@@ -4,4 +4,6 @@ pyyaml>=6
 anthropic>=0.40       # needed only if you use Claude
 google-genai>=1.0     # needed only if you use Gemini
 trafilatura>=1.8      # optional: full-text extraction
+google-auth>=2.20    # Google sign-in token check (was missing, so Google login could never succeed on the server)
+requests>=2.31       # HTTP transport used by google-auth
 pytest>=8

@@ -6,24 +6,38 @@ textarea{min-height:90px;resize:vertical}textarea:focus,input:focus{border-color
 .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}@media(max-width:900px){.cols{grid-template-columns:1fr}}
 .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.btn.r{background:#3b1414;color:var(--bd)}.pill.r{background:#3b1414;color:var(--bd)}
 .panel{margin-bottom:16px}.panel h3{margin:0 0 6px}.line{padding:6px 0;border-bottom:1px solid var(--ln);font-size:13px}.line a{color:var(--am);overflow-wrap:anywhere;word-break:break-all}.cols>div{min-width:0}
+.log{background:#0a0e13;border:1px solid var(--ln);border-radius:10px;padding:12px;max-height:440px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:12px/1.55 ui-monospace,"Cascadia Code",Consolas,monospace;color:#c9d3df;margin-top:10px}
+.jobs{width:100%;border-collapse:collapse;font-size:13px}.jobs td,.jobs th{text-align:left;padding:8px 6px;border-bottom:1px solid var(--ln);vertical-align:top}.jobs tr{cursor:pointer}.jobs tr:hover td{background:var(--p)}
+.kinds{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.kind{border:1px solid var(--ln);border-radius:12px;padding:14px;background:var(--p)}.kind p{margin:6px 0 10px;color:var(--mu);font-size:12.5px}
+.kind.main{border-color:var(--am);grid-column:1/-1}.pill.ok{background:#34d39922;color:var(--gn)}.pill.run{background:#e0a52c22;color:var(--am)}
+.login{max-width:380px;margin:12vh auto;padding:24px}
 .fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}.lens{display:inline-block;margin:4px 12px 4px 0;color:var(--mu);font-size:13px}.msg{color:var(--gn);margin-top:10px}
 </style></head><body>
-<header><div class="hd"><div><h1>GK Admin</h1><p>Review AI notes, write editorials and manage GK content. Secured by GK_ADMIN_PASSWORD.</p></div><a class="btn" href="/" target="_blank">View live site →</a></div><nav id="nav"></nav></header>
+<header><div class="hd"><div><h1>GK Admin</h1><p>Run the daily workflow, review AI notes, write editorials and manage GK content. Secured by GK_ADMIN_PASSWORD.</p></div><div><a class="btn" href="/" target="_blank">View live site →</a> <button class="btn g" onclick="logout()">Log out</button></div></div><nav id="nav"></nav></header>
 <main id="app"></main>
 <script>
 const $=i=>document.getElementById(i),esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let KEY=sessionStorage.getItem('k')||'';const A={rates:[],sst:'pending',sc:[],si:[],sdue:[],cat:'',gst:'pending',gds:[],tab:'review',status:'pending',route:'all',ed:null,meta:{lenses:{}},msg:''};
-async function api(p,b,retry){const r=await fetch(p,{method:b?'POST':'GET',headers:{'Content-Type':'application/json','X-Admin-Key':KEY},body:b?JSON.stringify(b):undefined});
-if(r.status===401&&!retry){KEY=prompt('Admin password')||'';sessionStorage.setItem('k',KEY);return api(p,b,1)}return r.json()}
+const ss={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},set(k,v){try{sessionStorage.setItem(k,v)}catch(e){}}};
+let KEY=ss.get('k')||'';const A={rates:[],sst:'pending',sc:[],si:[],sdue:[],cat:'',gst:'pending',gds:[],tab:ss.get('tab')||'run',status:'pending',route:'all',ed:null,meta:{lenses:{}},msg:'',jobs:null,job:null,jid:0};
+class Locked extends Error{}
+async function api(p,b){const r=await fetch(p,{method:b?'POST':'GET',headers:{'Content-Type':'application/json','X-Admin-Key':KEY},body:b?JSON.stringify(b):undefined,credentials:'same-origin'});
+if(r.status===401){showLogin(KEY?'Wrong password (or too many tries: wait 15 minutes).':'');throw new Locked()}
+let j;try{j=await r.json()}catch(e){j={error:`Server returned ${r.status}. If the backend was asleep, try again in a minute.`}}return j}
+function showLogin(err){$('nav').innerHTML='';$('app').innerHTML=`<div class="panel login"><h2>Admin login</h2><p class="mu">Enter GK_ADMIN_PASSWORD. It is kept only in this browser tab.</p><label>Password</label><input type="password" id="pw" autofocus onkeydown="if(event.key==='Enter')doLogin()"><button class="go" onclick="doLogin()">Log in</button><div class="err">${esc(err||'')}</div></div>`;setTimeout(()=>$('pw')&&$('pw').focus(),0)}
+function doLogin(){KEY=$('pw').value;ss.set('k',KEY);load()}
+function logout(){KEY='';ss.set('k','');showLogin('')}
 const sel=(id,cur,opts,fn)=>`<select onchange="${fn}(this.value)">${opts.map(o=>`<option ${o===cur?'selected':''}>${o}</option>`).join('')}</select>`;
-const T=[['review','Review queue'],['gd','GD Topics'],['static','Static GK'],['editorials','Editorials'],['publish','Publish / Live Feeds']];
-function nav(){$('nav').innerHTML=T.map(t=>`<a class="${A.tab===t[0]?'on':''}" onclick="A.tab='${t[0]}';A.msg='';load()">${t[1]}</a>`).join('')}
-async function load(){nav();A.meta=await api('/api/meta');
+const T=[['run','Daily workflow'],['review','Review queue'],['gd','GD Topics'],['static','Static GK'],['editorials','Editorials'],['publish','Publish / Live Feeds']];
+function nav(){$('nav').innerHTML=T.map(t=>`<a class="${A.tab===t[0]?'on':''}" onclick="go('${t[0]}')">${t[1]}</a>`).join('')}
+const go=t=>{A.tab=t;A.msg='';ss.set('tab',t);load()};
+async function load(){try{await load2()}catch(e){if(!(e instanceof Locked)){$('app').innerHTML=`<div class="single"><div class="err">Could not reach the server: ${esc(e.message)}. If it was asleep, wait a minute and reload.</div></div>`}}}
+async function load2(){A.meta=await api('/api/meta');nav();
+if(A.tab==='run'){A.jobs=await api('/api/admin/jobs');if(!A.jid&&A.jobs.running)A.jid=A.jobs.running;if(!A.jid&&A.jobs.recent.length)A.jid=A.jobs.recent[0].id;A.job=A.jid?await api('/api/admin/jobs/'+A.jid):null}
 if(A.tab==='review'){A.notes=await api(`/api/notes?status=${A.status}&route=${A.route}`);}
 if(A.tab==='editorials'){A.eds=await api('/api/editorials')}
 if(A.tab==='gd'){A.gds=await api('/api/gd?status='+A.gst)}
 if(A.tab==='static'){A.sc=await api('/api/static/cats');if(!A.cat||!A.sc.find(c=>c.slug===A.cat))A.cat=A.sc[0].slug;A.si=await api(`/api/static/items?cat=${A.cat}&status=${A.sst}`);A.sdue=await api('/api/static/due');A.rates=await api('/api/static/rates')}draw()}
-function draw(){const v={review:vReview,gd:vGd,static:vStatic,editorials:vEd,publish:vPub}[A.tab]();$('app').innerHTML=v}
+function draw(){const v={run:vRun,review:vReview,gd:vGd,static:vStatic,editorials:vEd,publish:vPub}[A.tab]();$('app').innerHTML=v}
 function vReview(){const m=A.meta.counts||{};
 const side=`<aside><label>Status</label>${sel('s',A.status,['pending','approved','rejected','auto_published'],'setS')}<label>Route</label>${sel('r',A.route,['all','deep_review','quick_review','auto'],'setR')}<p class="side-note">pending: ${m.pending||0} · approved: ${m.approved||0} · rejected: ${m.rejected||0}</p><p class="side-note">Deep review = a claim could not be matched to its source. Check those first.</p></aside>`;
 return `<div class="lay">${side}<section class="main"><h2>${A.status} notes<small>${A.notes.length}</small></h2>${A.notes.map(note).join('')||'<p class="mu">Nothing here.</p>'}</section></div>`}
@@ -54,7 +68,7 @@ async function delEd(id){if(confirm('Delete this editorial permanently?')){await
 function vPub(){const m=A.meta.counts||{};return `<div class="single"><h2>Publish &amp; Feed Management</h2><div class="panel"><div class="stats"><div class="stat"><b>${m.approved||0}</b><span>approved notes</span></div><div class="stat"><b>${m.published_editorials||0}</b><span>published editorials</span></div><div class="stat"><b>${m.pending||0}</b><span>still pending</span></div></div>
 <p class="mu">The hosted app serves live content directly from the database to your Vercel frontend. Approving notes, adding static items, or publishing editorials reflects immediately. You can also trigger the daily pipeline right now to ingest and process today's news feeds from PIB, The Hindu, etc.</p>
 <div class="acts"><button class="btn" onclick="fetchDaily()">Trigger Today's News Feed Fetch</button><button class="btn g" onclick="build()">Export site bundle</button><a class="btn g" href="/" target="_blank">Open site →</a></div><div class="msg">${esc(A.msg)}</div></div></div>`}
-async function fetchDaily(){if(!confirm("Fetch and ingest today's feeds now? This can take 1-2 minutes depending on source volume.")){return}A.msg='Fetching daily feeds and running pipeline... please wait...';draw();const r=await api('/api/admin/fetch-daily',{});if(r.error){A.msg='Error: '+r.error}else{A.msg=`Fetch complete for ${r.day}. Check the Review Queue tab!`}load()}
+async function fetchDaily(){A.tab='run';ss.set('tab','run');runJob('daily')}
 const lines=s=>s.split('\n').map(x=>x.trim()).filter(Boolean),setG=v=>{A.gst=v;load()};
 function gdCard(g){const i=g.id,ta=(k,l,v,r)=>`<label>${l}</label><textarea id="${k}${i}" rows="${r||3}">${esc(v)}</textarea>`;
 const rest=`${ta('gc','Context',g.context,2)}<div class="cols"><div>${ta('gf','For (one per line)',g.for_points.join('\n'),6)}</div><div>${ta('ga','Against (one per line)',g.against_points.join('\n'),6)}</div></div>${ta('gk','Key facts to quote (one per line)',g.key_facts.join('\n'),3)}${ta('go','Open with',g.opening,2)}${ta('gn','Close with',g.conclusion,2)}`;
@@ -105,5 +119,40 @@ A.msg=r.error||(r.status==='ignored'?'That text does not state current policy ra
 async function rateReview(id,action){const r=await api('/api/static/rates-review',{id,action});if(r.error)alert(r.error);load()}
 async function stHist(id){const h=await api('/api/static/history?id='+id);alert(h.map(x=>`${x.at}  ${x.note||''}\n  was: ${x.old?JSON.stringify(x.old.data):'(new)'}\n  now: ${JSON.stringify(x.new.data)} [${x.new.status}]`).join('\n\n')||'No history.')}
 async function build(){A.msg='Building...';draw();const r=await api('/api/build',{});A.msg=r.error||`Built: ${r.notes} notes, ${r.questions} questions, ${r.editorials} editorials.`;load()}
-load();
+// ---------- Daily workflow tab ----------
+const fmtT=t=>t?new Date(t).toLocaleString([], {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'-';
+const dur=(a,b)=>{if(!a)return'';const s=Math.max(0,Math.round(((b?new Date(b):new Date())-new Date(a))/1000));return s<60?s+'s':Math.floor(s/60)+'m '+(s%60)+'s'};
+const stPill=s=>`<span class="pill ${s==='done'?'ok':s==='running'?'run':s==='partial'?'n':'r'}">${esc(s)}</span>`;
+function summary(r){if(!r)return'';if(r.error)return'Error: '+r.error;const d=r.daily||r;const bits=[];
+if(d.notes!=null)bits.push(`${d.notes} notes`);if(d.fetched!=null)bits.push(`${d.fetched} fetched`);if(d.stopped)bits.push('stopped: '+d.stopped);
+if(r.gd&&r.gd.gd_topics_drafted!=null)bits.push(`${r.gd.gd_topics_drafted} GD`);if(r.gd_topics_drafted!=null)bits.push(`${r.gd_topics_drafted} GD topics`);
+if(r.publish)bits.push(r.publish.error?'GitHub: '+r.publish.error:'GitHub backup '+(r.publish.commit||'ok'));if(r.commit)bits.push('commit '+r.commit);
+if(r.added!=null)bits.push(`${r.added} drafted`);if(r.applied!=null)bits.push(`${r.applied} rates applied, ${r.waiting} waiting`);
+if(d.est_cost_inr!=null)bits.push(`≈ Rs ${d.est_cost_inr}`);return bits.join(' · ')||JSON.stringify(r).slice(0,160)}
+function jobBox(){const j=A.job;if(!j)return'<p class="mu">No runs yet. Start with "Everyday update" above.</p>';
+return `<div class="tags">${stPill(j.status)}<span class="pill n">#${j.id}</span><span class="pill n">${esc(j.label)}</span><span class="pill n">${fmtT(j.started)}</span><span class="pill n">${dur(j.started,j.finished)}</span></div>
+${j.result?`<p class="mu" style="margin:8px 0 0">${esc(summary(j.result))}</p>`:''}<div class="log" id="log">${esc(j.log||'(waiting for output...)')}</div>`}
+function vRun(){const J=A.jobs,P=J.pending,S=J.setup,busy=!!J.running,L=J.last_daily;
+const kind=k=>{const x=J.kinds.find(y=>y.kind===k);return `<div class="kind ${k==='everyday'?'main':''}"><b>${esc(x.label)}</b><p>${esc(x.help)}</p>
+${k==='everyday'||k==='daily'?`<label>Day (blank = today, ${J.today})</label><input type="date" id="day_${k}" value="">`:''}${k==='static-fill'?`<label>Batches (1-40)</label><input type="text" id="calls" value="6">`:''}
+${k==='publish'&&!S.github?'<p class="err">Not set up: add GK_GITHUB_TOKEN and GK_GITHUB_REPO on the server.</p>':''}
+<button class="btn ${k==='everyday'?'':'g'}" style="margin-top:10px" ${busy||(k==='publish'&&!S.github)?'disabled':''} onclick="runJob('${k}')">${busy?'Another job is running':'Run'}</button></div>`};
+const link=(n,l,t)=>`<a href="#" onclick="go('${t}');return false"><b>${n}</b> ${l}</a>`;
+return `<div class="single"><h2>Daily workflow<small>today ${J.today} (IST)</small></h2>
+<div class="panel"><div class="stats"><div class="stat"><b>${L?esc(L.day):'never'}</b><span>last news run${L?' · '+esc(L.at)+' UTC':''}</span></div>
+<div class="stat"><b>${P.notes}</b><span>notes to review</span></div><div class="stat"><b>${P.gd}</b><span>GD topics to review</span></div><div class="stat"><b>${P.static}</b><span>Static GK to review</span></div><div class="stat"><b>${P.rates}</b><span>rate changes waiting</span></div></div>
+<p class="mu">Review: ${link(P.notes,'notes','review')} · ${link(P.gd,'GD topics','gd')} · ${link(P.static,'Static GK','static')} · ${link(P.rates,'RBI rates','static')}. Nothing reaches students until you approve it (unless GK_AUTO_PUBLISH=1).</p>
+<div class="tags"><span class="pill ${S.provider==='mock'?'r':'n'}">AI: ${esc(S.provider)}</span><span class="pill ${S.mail==='log'?'r':'n'}">email: ${esc(S.mail==='log'?'not set up':S.mail)}</span><span class="pill ${S.github?'n':'r'}">GitHub backup: ${S.github?'on':'off'}</span><span class="pill n">${S.users} users</span></div></div>
+<div class="kinds">${J.kinds.map(k=>kind(k.kind)).join('')}</div><div class="msg" id="rmsg">${esc(A.msg)}</div>
+<h2 style="margin-top:26px">Run log</h2><div class="panel" id="jobbox">${jobBox()}</div>
+<h2>History<small>${J.recent.length}</small></h2><div class="panel"><table class="jobs"><tr><th>#</th><th>Job</th><th>Status</th><th>Started</th><th>Took</th><th>Result</th></tr>
+${J.recent.map(j=>`<tr onclick="showJob(${j.id})" ${j.id===A.jid?'style="background:var(--p2)"':''}><td>${j.id}</td><td>${esc(j.label)}</td><td>${stPill(j.status)}</td><td>${fmtT(j.started)}</td><td>${dur(j.started,j.finished)}</td><td class="mu">${esc(summary(j.result))}</td></tr>`).join('')||'<tr><td colspan="6" class="mu">No runs yet.</td></tr>'}</table></div></div>`}
+async function runJob(k){const params={};const d=$('day_'+k);if(d&&d.value)params.day=d.value;if(k==='static-fill')params.calls=+($('calls')||{}).value||6;
+if(k==='everyday'&&!confirm('Run the full everyday update now? It can take 5-15 minutes on a free AI plan. You can leave this page open to watch the log.'))return;
+const r=await api('/api/admin/jobs',{kind:k,params});if(r.error){A.msg=r.error;await load();return}A.jid=r.id;A.msg=`Started job #${r.id}.`;await load();poll()}
+async function showJob(id){A.jid=id;A.job=await api('/api/admin/jobs/'+id);draw();poll()}
+let PT=0;async function poll(){clearTimeout(PT);if(A.tab!=='run'||!A.job||A.job.status!=='running')return;
+PT=setTimeout(async()=>{try{if(A.tab!=='run')return;const j=await api('/api/admin/jobs/'+A.jid);const lg=$('log'),stick=lg&&lg.scrollTop+lg.clientHeight>=lg.scrollHeight-30;
+A.job=j;if(j.status!=='running'){A.msg=`Job #${j.id} ${j.status}.`;await load();return}$('jobbox').innerHTML=jobBox();const l2=$('log');if(l2&&stick)l2.scrollTop=l2.scrollHeight;poll()}catch(e){}},3000)}
+load().then(()=>{if(A.tab==='run')poll()});
 </script></body></html>

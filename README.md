@@ -89,7 +89,14 @@ Logged-in users get bookmarks and test history saved to their account across dev
 Google sign-in: create an OAuth client (type Web) in Google Cloud Console, add your site address (e.g. http://localhost:5080) under Authorized JavaScript origins,
 then `setx GK_GOOGLE_CLIENT_ID "<client id>"` and restart `serve`. Without it the Google button is hidden.
 Before going public: serve over HTTPS and set GK_SECURE_COOKIE=1; set GK_CONTACT_EMAIL; have the draft privacy page (privacy.html) reviewed.
-Not built yet: email verification, password reset, and paid-plan gating (the `plan` field exists, default 'free').
+Email verification and password reset: signup emails a confirmation link (48 h); the account box shows "Please confirm your email" with a
+Resend button. "Forgot password?" on the login box emails a single-use reset link (1 h) that signs out every other device; it answers the same
+way whether or not the email has an account. Logged-in users can change (or, for Google accounts, add) a password. If someone signed up with an
+email they never confirmed and the real owner later uses Google sign-in, the unconfirmed password and its sessions are removed.
+Email sending (pick one): `RESEND_API_KEY` (HTTPS, works on Render's free tier, which blocks outbound SMTP) or `GK_SMTP_HOST`/`GK_SMTP_PORT`/
+`GK_SMTP_USER`/`GK_SMTP_PASS`; plus `GK_MAIL_FROM`. Without one, emails are only printed in the server log. Set `GK_PUBLIC_URL` to your
+site's https address so links in emails point to it. Per-IP limits: 6 emails / 15 min, 10 signups / hour, 30 logins / 15 min.
+Not built yet: paid-plan gating (the `plan` field exists, default 'free').
 Opened as a plain file (no server) the site still works, just without accounts.
 
 ## Duplicates (one event = one note)
@@ -176,7 +183,21 @@ a 450-650 word draft is saved as an UNPUBLISHED draft (GK_ED_TIER, default stron
 your notes or those approved notes are listed as flags. Nothing goes live until you edit and publish it. Written and edited by you in the admin site's Editorials tab (or `python run.py editorial --title T --file body.md --lens UPSC_PSC`).
 Drafts stay private; only *published* editorials appear, at the top of the daily, weekly and monthly digests.
 Tag an editorial with lenses to show it only in those exam views; no tag = every view. The AI pipeline never creates or edits editorials.
-Admin site: standard-library server on 127.0.0.1 only; set GK_ADMIN_PASSWORD to require a password. Do not expose it publicly.
+Admin site: `python run.py admin` runs it on 127.0.0.1 only. The public server (`serve`) also hosts it at /admin; there GK_ADMIN_PASSWORD is required
+(without it /admin only answers requests from the same machine), and 10 wrong passwords from one IP block it for 15 minutes.
+
+## Hosted admin: the everyday workflow
+Admin -> Daily workflow tab. Each button starts a background job on the server and streams its log into the page (one job at a time):
+- Everyday update (all steps): news pipeline -> GD topics -> rebuild site files -> GitHub backup (if set up). Then review in the other tabs.
+- Or one step at a time: News pipeline only, Draft GD topics, Fill Static GK, Check RBI rates, Rebuild site files, Back up to GitHub.
+"Today" is India time (GK_TZ_OFFSET_MIN, default 330), not the server's UTC date. Jobs and their logs are kept in the `jobs` table.
+Automate it: `curl -X POST https://<backend>/api/admin/jobs -H "Authorization: Bearer $GK_ADMIN_PASSWORD" -H "Content-Type: application/json" -d '{"kind":"everyday"}'`
+from any scheduler (cron-job.org, GitHub Actions, Render Cron).
+The Vercel site shows the bundled site/data.js instantly, then swaps in live content from /api/content, so approvals show up without a redeploy.
+GitHub backup: set GK_GITHUB_TOKEN (fine-grained, Contents read/write on this repo only) and GK_GITHUB_REPO=owner/name (GK_GITHUB_BRANCH, default main).
+It commits site/data.js; an empty database re-seeds itself from that file (notes, quizzes, editorials, GD topics, approved Static GK).
+Storage: SQLite lives at GK_DB. On a host with an ephemeral disk (Render free), the database, and with it user accounts and anything pending,
+is wiped on every restart or deploy. Mount a persistent disk and point GK_DB at it, or move user data to a hosted database.
 
 ## Exam lenses
 config/lenses.yaml defines UPSC_PSC (analytical), SSC_BANKING (quick facts + memorise line), DEFENCE, MANAGEMENT (discussion point).

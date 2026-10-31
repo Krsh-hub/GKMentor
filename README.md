@@ -196,8 +196,16 @@ from any scheduler (cron-job.org, GitHub Actions, Render Cron).
 The Vercel site shows the bundled site/data.js instantly, then swaps in live content from /api/content, so approvals show up without a redeploy.
 GitHub backup: set GK_GITHUB_TOKEN (fine-grained, Contents read/write on this repo only) and GK_GITHUB_REPO=owner/name (GK_GITHUB_BRANCH, default main).
 It commits site/data.js; an empty database re-seeds itself from that file (notes, quizzes, editorials, GD topics, approved Static GK).
-Storage: SQLite lives at GK_DB. On a host with an ephemeral disk (Render free), the database, and with it user accounts and anything pending,
-is wiped on every restart or deploy. Mount a persistent disk and point GK_DB at it, or move user data to a hosted database.
+## Database: Turso (persistent) or a local SQLite file
+Without Turso settings the app uses the SQLite file at GK_DB (default gk.db). On a host with a temporary disk (Render free) that file,
+and every user account in it, is wiped on each restart, so production should use Turso:
+1. Create a database in the same region as the backend (Turso dashboard, or `turso db create gkmentor --location <region>`), then a token
+   (`turso db tokens create gkmentor`). Same region matters: every query is one network round trip.
+2. Copy your existing data once, from your computer: set TURSO_DATABASE_URL (libsql://...) and TURSO_AUTH_TOKEN, then
+   `python run.py turso-copy` (reads gk.db; `--file other.db` to pick another; `--replace` wipes Turso's tables first).
+3. Add the same two variables on Render and redeploy. The admin Daily workflow page then shows "Turso: <host>" as the database.
+Every command (`daily`, `admin`, `serve`, ...) uses Turso while those variables are set; remove them to work on gk.db again.
+Turso is reached over its HTTP API with the standard library (gk/turso.py), so no extra package is needed; `turso dev` (http://127.0.0.1:8080) works too.
 
 ## Exam lenses
 config/lenses.yaml defines UPSC_PSC (analytical), SSC_BANKING (quick facts + memorise line), DEFENCE, MANAGEMENT (discussion point).

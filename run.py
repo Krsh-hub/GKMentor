@@ -17,6 +17,7 @@
   python run.py fix-sections                           re-map existing notes to the fixed menu sections
   python run.py build-site [--out site]                build the reader website from approved notes
   python run.py check-llm                              verify provider, key and model names with a tiny call
+  python run.py turso-copy [--file gk.db] [--replace]  one-time: copy the local SQLite database into Turso (TURSO_DATABASE_URL/TURSO_AUTH_TOKEN)
   python run.py approve-all                            demo helper"""
 import argparse, sys
 if hasattr(sys.stdout, "reconfigure"):
@@ -27,15 +28,18 @@ from gk import db, pipeline, aggregate, config, editorial, gold
 from gk.llm import get_llm
 
 ap = argparse.ArgumentParser()
-ap.add_argument("cmd", choices=["daily", "daily-digest", "weekly", "monthly", "editorial", "gold", "check-llm", "build-site", "fix-sections", "coverage", "gd", "serve", "users", "static-seed", "static-import", "rates", "static-draft", "static-fill", "admin", "approve-all"])
+ap.add_argument("cmd", choices=["daily", "daily-digest", "weekly", "monthly", "editorial", "gold", "check-llm", "build-site", "fix-sections", "coverage", "gd", "serve", "users", "static-seed", "static-import", "rates", "static-draft", "static-fill", "admin", "approve-all", "turso-copy"])
 ap.add_argument("--day", default=date.today().isoformat())
 ap.add_argument("--year", type=int); ap.add_argument("--month", type=int)
 ap.add_argument("--lens", action="append", help="lens id (repeatable for editorial)")
 ap.add_argument("--title"); ap.add_argument("--file"); ap.add_argument("--status", default="published")
-ap.add_argument("--out", default="site"); ap.add_argument("--q"); ap.add_argument("--cat"); ap.add_argument("--url"); ap.add_argument("--hint", default=""); ap.add_argument("--n", type=int, default=25); ap.add_argument("--calls", type=int, default=40); ap.add_argument("--approve", action="store_true"); ap.add_argument("--port", type=int, default=None); ap.add_argument("--host", default="127.0.0.1"); ap.add_argument("--demo", action="store_true", help="offline: mock LLM + sample feeds")
+ap.add_argument("--out", default="site"); ap.add_argument("--q"); ap.add_argument("--cat"); ap.add_argument("--url"); ap.add_argument("--hint", default=""); ap.add_argument("--n", type=int, default=25); ap.add_argument("--calls", type=int, default=40); ap.add_argument("--approve", action="store_true"); ap.add_argument("--replace", action="store_true"); ap.add_argument("--port", type=int, default=None); ap.add_argument("--host", default="127.0.0.1"); ap.add_argument("--demo", action="store_true", help="offline: mock LLM + sample feeds")
 a = ap.parse_args()
 lens1 = a.lens[0] if a.lens else None
 
+if a.cmd == "turso-copy":                    # before db.connect(): that would already point at Turso
+    print("copying", a.file or config.DB_PATH, "->", db.where())
+    db.copy_to_turso(a.file, a.replace); print("done"); sys.exit(0)
 con = db.connect()
 if a.cmd == "daily":
     src = str(config.ROOT / "data/demo/sources_demo.yaml") if a.demo else None

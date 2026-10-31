@@ -19,19 +19,22 @@ def _page():
 
 def _notes(con, status, route):
     q = "SELECT * FROM notes WHERE status=?" + ("" if route == "all" else " AND route=?") + " ORDER BY day DESC, id DESC LIMIT 200"
-    out = []
-    for n in con.execute(q, (status,) if route == "all" else (status, route)):
-        b = json.loads(n["body_json"])
-        qs = []
-        for x in con.execute("SELECT * FROM questions WHERE note_id=?", (n["id"],)):
+    rows = con.execute(q, (status,) if route == "all" else (status, route)).fetchall()
+    ids = [n["id"] for n in rows]; ph = ",".join("?" * len(ids))
+    qs, cl = {}, {}
+    if ids:                                                   # 2 queries for all notes instead of 2 per note
+        for x in con.execute(f"SELECT * FROM questions WHERE note_id IN ({ph}) ORDER BY id", ids):
             m = json.loads(x["body_json"])
-            qs.append(dict(id=x["id"], q=m["question"], options=m["options"], answer=m["answer_index"],
-                           valid=x["valid"], solver_ok=x["solver_ok"], status=x["status"]))
+            qs.setdefault(x["note_id"], []).append(dict(id=x["id"], q=m["question"], options=m["options"], answer=m["answer_index"],
+                                                        valid=x["valid"], solver_ok=x["solver_ok"], status=x["status"]))
+        for c in con.execute(f"SELECT * FROM claims WHERE note_id IN ({ph}) ORDER BY id", ids):
+            cl.setdefault(c["note_id"], []).append(dict(kind=c["kind"], text=c["text"], grounded=c["grounded"]))
+    out = []
+    for n in rows:
+        b = json.loads(n["body_json"])
         out.append(dict(id=n["id"], day=n["day"], sector=n["sector"], headline=n["headline"], importance=n["importance"],
                         route=n["route"], bullets=b["bullets"], exam_angle=b.get("exam_angle", ""),
-                        sources=json.loads(n["source_urls"] or "[]"),
-                        claims=[dict(kind=c["kind"], text=c["text"], grounded=c["grounded"])
-                                for c in con.execute("SELECT * FROM claims WHERE note_id=?", (n["id"],))], questions=qs))
+                        sources=json.loads(n["source_urls"] or "[]"), claims=cl.get(n["id"], []), questions=qs.get(n["id"], [])))
     return out
 
 def _post_note(con, d):

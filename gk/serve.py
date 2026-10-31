@@ -105,7 +105,7 @@ def make_public_server(port=5080, host="127.0.0.1", db_path=None, site_dir=None,
                     ok = users.verify_email(con, (parse_qs(u.query).get("token") or [""])[0])
                     return self._send(302, {}, extra={"Location": f"{public_url}/?verified={'1' if ok else '0'}"})
                 if u.path == "/api/content":
-                    return self._send(200, site.build_site_data(con))
+                    return self._send(200, site.cached_site_data(con))
                 if u.path in ("/admin", "/admin/"):
                     return self._send(200, raw=admin._page().encode("utf-8"), ctype="text/html")
                 if u.path.startswith(("/api/admin/", "/api/static/")) or u.path in ("/api/meta", "/api/notes", "/api/gd", "/api/editorials"):

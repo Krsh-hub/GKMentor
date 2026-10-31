@@ -21,18 +21,23 @@ GROUPS = {
 PUB = "('approved','auto_published')"
 
 def build_site_data(con):
+    # one query per table (not per note): matters when the database is across the network (Turso)
+    facts, reported = {}, {}
+    for c in con.execute(f"SELECT note_id, kind, text FROM claims WHERE grounded=1 AND note_id IN (SELECT id FROM notes WHERE status IN {PUB}) ORDER BY id"):
+        facts.setdefault(c["note_id"], []).append({"k": c["kind"], "t": c["text"]})
+    for r in con.execute(f"SELECT cluster_id, MIN(COALESCE(pub_day, fetched_on)) AS first FROM articles WHERE cluster_id IN "
+                         f"(SELECT cluster_id FROM notes WHERE status IN {PUB}) GROUP BY cluster_id"):
+        reported[r["cluster_id"]] = r["first"]
     notes = []
     for n in con.execute(f"SELECT * FROM notes WHERE status IN {PUB} ORDER BY day DESC, id DESC"):
         b = json.loads(n["body_json"])
-        facts = [{"k": c["kind"], "t": c["text"]} for c in
-                 con.execute("SELECT kind,text FROM claims WHERE note_id=? AND grounded=1", (n["id"],))]
+        first = reported.get(n["cluster_id"])
         notes.append(dict(id=n["id"], day=n["day"], sector=n["sector"], headline=n["headline"], bullets=b["bullets"],
                           exam_angle=b.get("exam_angle", ""), static_links=b.get("static_links", []),
                           lens_points=b.get("lens_points", {}), importance=n["importance"],
                           lenses=[x for x in (n["lenses"] or "").split(",") if x],
-                          sources=json.loads(n["source_urls"] or "[]"), facts=facts,
-                          reported=(lambda r: r if r and r < n["day"] else None)(
-                              con.execute("SELECT MIN(COALESCE(pub_day, fetched_on)) FROM articles WHERE cluster_id=?", (n["cluster_id"],)).fetchone()[0])))
+                          sources=json.loads(n["source_urls"] or "[]"), facts=facts.get(n["id"], []),
+                          reported=first if first and first < n["day"] else None))
     qs = []
     for q in con.execute(f"SELECT q.id, q.note_id, q.body_json, n.day, n.sector FROM questions q JOIN notes n ON n.id=q.note_id "
                          f"WHERE q.status='approved' AND q.valid=1 AND n.status IN {PUB}"):
@@ -56,6 +61,20 @@ def build_site_data(con):
     lenses = {k: {"label": v["label"], "sectors": v.get("sectors", [])} for k, v in config.load_lenses().items()}
     return dict(generated=datetime.now().strftime("%d %b %Y, %H:%M"), groups=GROUPS, lenses=lenses,
                 notes=notes, questions=qs, editorials=eds, gd=gd, static=scats, static_questions=squestions)
+
+_cache = {"ver": None, "at": 0.0, "data": None}
+
+def cached_site_data(con, ttl=300):
+    """build_site_data, reused until something is written (or `ttl` seconds pass, for writes made by other processes)."""
+    import time
+    from . import turso, db
+    if not (db.remote() and type(con).__module__.endswith("turso")): return build_site_data(con)   # local SQLite: always fresh
+    if _cache["data"] is not None and _cache["ver"] == turso.VERSION[0] and time.time() - _cache["at"] < ttl:
+        return _cache["data"]
+    ver = turso.VERSION[0]
+    data = build_site_data(con)
+    _cache.update(ver=ver, at=time.time(), data=data)
+    return data
 
 def build_site(con, out="site", title="GK Daily"):
     out = Path(out); out.mkdir(parents=True, exist_ok=True)

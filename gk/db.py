@@ -1,4 +1,4 @@
-import sqlite3, time
+import os, sqlite3, threading, time
 from . import config
 
 SCHEMA = """
@@ -54,10 +54,40 @@ CREATE TABLE IF NOT EXISTS runs(
   id INTEGER PRIMARY KEY, day TEXT, stage TEXT, detail TEXT, created TEXT DEFAULT CURRENT_TIMESTAMP);
 """
 
+_ready, _ready_lock, _swept = set(), threading.Lock(), [0.0]
+
+def remote():
+    """True when the app's main database is Turso (TURSO_DATABASE_URL set). An explicit path always means a local SQLite file."""
+    from . import turso
+    return turso.configured()
+
+def where(path=None):
+    """Human-readable location of the database, for the admin page."""
+    if path is None and remote():
+        from urllib.parse import urlparse
+        return "Turso: " + urlparse(os.environ["TURSO_DATABASE_URL"].replace("libsql://", "https://", 1)).netloc
+    return str(path or config.DB_PATH)
+
 def connect(path=None):
+    if path is None and remote():
+        from . import turso
+        con = turso.connect()
+        key = "turso:" + os.environ["TURSO_DATABASE_URL"]
+        with _ready_lock:                                       # schema check costs round trips: once per process
+            if key not in _ready:
+                setup(con); _ready.add(key)             # Turso keeps its data: no re-seeding (copy it once: python run.py turso-copy)
+        if time.time() - _swept[0] > 600:                       # housekeeping at most every 10 minutes
+            _swept[0] = time.time(); _sweep(con)
+        return con
     con = sqlite3.connect(path or config.DB_PATH)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")                          # better concurrent read/write
+    setup(con); _sweep(con)
+    if path is None:
+        seed_if_empty(con)
+    return con
+
+def setup(con):
     con.executescript(SCHEMA)
     have = {r[1] for r in con.execute("PRAGMA table_info(editorials)")}
     for col in ("source TEXT DEFAULT 'admin'", "flags TEXT DEFAULT ''"):       # upgrade databases created by older versions
@@ -73,13 +103,44 @@ def connect(path=None):
         con.execute("UPDATE users SET email_verified=1 WHERE google_sub IS NOT NULL")   # Google already verified these
     from . import static
     static.ensure_categories(con)
-    # housekeeping: purge expired sessions (cheap, runs once per connect)
+    con.commit()
+
+def _sweep(con):
+    """Purge expired sessions and email tokens."""
     con.execute("DELETE FROM sessions WHERE expires < ?", (time.time(),))
     con.execute("DELETE FROM auth_tokens WHERE expires < ?", (time.time(),))
     con.commit()
-    if path is None:
-        seed_if_empty(con)
-    return con
+
+def copy_to_turso(src_path=None, replace=False, batch_bytes=800_000):
+    """One-time move: copy every table of the local SQLite file (default gk.db) into the Turso database, keeping ids."""
+    import json
+    from . import turso
+    if not remote(): raise SystemExit("Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN first.")
+    src = sqlite3.connect(src_path or config.DB_PATH); src.row_factory = sqlite3.Row
+    dst = turso.connect(); setup(dst)
+    tables = [r[0] for r in src.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+    have = {r[0] for r in dst.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    # static_cats is filled automatically by setup(), so it is always overwritten
+    busy = [t for t in tables if t in have and t != "static_cats" and dst.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]]
+    if busy and not replace:
+        raise SystemExit(f"Turso already has data in: {', '.join(busy)}. Re-run with --replace to wipe those tables and copy again.")
+    report = {}
+    for t in tables:
+        if t not in have: continue                                   # table from an old version that the app no longer uses
+        cols = [r[1] for r in src.execute(f"PRAGMA table_info({t})")]
+        dcols = {r[1] for r in dst.execute(f"PRAGMA table_info({t})")}
+        cols = [c for c in cols if c in dcols]
+        if replace or t == "static_cats": dst.execute(f"DELETE FROM {t}")
+        sql = f"INSERT OR REPLACE INTO {t}({','.join(cols)}) VALUES({','.join('?' * len(cols))})"
+        buf, size, n = [], 0, 0
+        for r in src.execute(f"SELECT {','.join(cols)} FROM {t}"):
+            vals = tuple(r); buf.append((sql, vals)); size += len(json.dumps(vals, default=str)) + 50; n += 1
+            if size >= batch_bytes or len(buf) >= 500:
+                dst.execute_many(buf); buf, size = [], 0
+        if buf: dst.execute_many(buf)
+        got = dst.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        report[t] = (n, got); print(f"  {t}: {n} rows copied, Turso now has {got}", flush=True)
+    return report
 
 def _note_for(con, q):
     """Older data.js files have no note_id on questions: attach them to a note of the same day and sector."""

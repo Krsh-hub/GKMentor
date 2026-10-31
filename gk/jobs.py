@@ -169,7 +169,7 @@ def overview(con):
                      static=con.execute("SELECT COUNT(*) FROM static_items WHERE status='pending'").fetchone()[0],
                      rates=con.execute("SELECT COUNT(*) FROM rate_updates WHERE status='pending'").fetchone()[0]),
         setup=dict(github=publish.configured(), mail=mailer.provider(), provider=_provider_name(),
-                   db_path=str(ctx_db(con)), users=con.execute("SELECT COUNT(*) FROM users").fetchone()[0]))
+                   db_path=db.where(ctx_path(con)), users=con.execute("SELECT COUNT(*) FROM users").fetchone()[0]))
 
 def _provider_name():
     try:
@@ -178,9 +178,11 @@ def _provider_name():
     except Exception as e:
         return f"unknown ({e})"
 
-def ctx_db(con):
-    try: return con.execute("PRAGMA database_list").fetchone()[2]
-    except Exception: return "?"
+def ctx_path(con):
+    """File behind a local SQLite connection; None for Turso (db.where then names the Turso host)."""
+    if not hasattr(con, "row_factory"): return None
+    try: return con.execute("PRAGMA database_list").fetchone()[2] or None
+    except Exception: return None
 
 def get(con, jid):
     r = con.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()

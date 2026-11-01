@@ -29,6 +29,8 @@ th.sr{cursor:pointer;user-select:none}th.sr:hover{color:var(--tx)}
 .tags{display:flex;gap:6px;flex-wrap:wrap}.pill{padding:3px 9px;border-radius:6px;background:#0f3b30;color:var(--gn);font-size:11.5px}.pill.n{background:var(--p2);color:var(--mu)}
 .card ul{margin:0;padding-left:18px;color:#c3ccd8}.card li{margin:3px 0}.row{display:flex;justify-content:space-between;color:var(--mu)}.row b{color:var(--tx)}
 .open{margin-top:auto;background:transparent;border:1px solid var(--ln);color:var(--tx);border-radius:10px;padding:11px;font-weight:600;cursor:pointer}.open:hover{background:var(--p2)}
+.shr{background:0;border:0;color:var(--mu);font-size:16px;cursor:pointer;padding:0;margin-right:8px}.shr:hover{color:var(--tx)}
+#shm{position:fixed;z-index:60;background:var(--p);border:1px solid var(--ln);border-radius:10px;padding:6px;display:none;flex-direction:column;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,.4)}#shm.on{display:flex}#shm a,#shm button{background:0;border:0;color:var(--tx);text-align:left;padding:8px 10px;border-radius:6px;font:inherit;font-size:13.5px;cursor:pointer;text-decoration:none}#shm a:hover,#shm button:hover{background:var(--ln)}
 .star{background:0;border:0;color:var(--mu);font-size:18px;cursor:pointer;padding:0}.star.on{color:var(--am)}
 .more{padding-top:10px;border-top:1px dashed var(--ln);font-size:13px}.more p{margin:6px 0}.more b{color:var(--am)}.more a{color:var(--am);font-size:12px}
 .ed{background:var(--p);border:1px solid var(--am);border-radius:14px;padding:18px 22px;margin:0 0 18px}.ed h3{margin:8px 0 10px;font-size:19px}.ed .by{color:var(--mu);font-size:12px;margin-top:10px}.ed .body p,.ed .body ul{margin:8px 0}
@@ -77,12 +79,23 @@ const srt=a=>S.sort==='new'?a:[...a].sort((x,y)=>R[y.importance]-R[x.importance]
 const empty=()=>'<div class="panel"><h2>Nothing published yet</h2><p class="mu">Approve notes in the admin dashboard, then run <code>python run.py build-site</code> and refresh this page.</p></div>';
 function md(s){return esc(s).split(/\n{2,}/).map(p=>/^\s*[-*] /.test(p)?'<ul>'+p.split('\n').map(l=>'<li>'+l.replace(/^\s*[-*] /,'')+'</li>').join('')+'</ul>':'<p>'+p.replace(/\n/g,'<br>')+'</p>').join('').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')}
 function card(n){const o=S.open.has(n.id),lp=Object.entries(n.lens_points||{}).filter(([k])=>!S.lens||k===S.lens),lb=k=>(D.lenses[k]||{}).label||k;
-return `<article class="card"><div class="top"><div><h3>${esc(n.headline)}</h3><div class="sub">${dt(n.day,{day:'numeric',month:'short',year:'numeric'})}${n.reported&&/^\d{4}-\d\d-\d\d$/.test(n.reported)?` · <span style="color:var(--am)">reported ${dt(n.reported,{day:'numeric',month:'short'})}</span>`:''}</div></div><div class="rt"><button class="star ${B.has(n.id)?'on':''}" onclick="bm(${n.id})">★</button><div class="badge"><b class="${n.importance}">${n.importance}</b><br>priority</div></div></div>
+return `<article class="card" id="n${n.id}"><div class="top"><div><h3>${esc(n.headline)}</h3><div class="sub">${dt(n.day,{day:'numeric',month:'short',year:'numeric'})}${n.reported&&/^\d{4}-\d\d-\d\d$/.test(n.reported)?` · <span style="color:var(--am)">reported ${dt(n.reported,{day:'numeric',month:'short'})}</span>`:''}</div></div><div class="rt"><button class="shr" title="Share" aria-label="Share" onclick="shr(${n.id},this)">&#x2934;</button><button class="star ${B.has(n.id)?'on':''}" onclick="bm(${n.id})">★</button><div class="badge"><b class="${n.importance}">${n.importance}</b><br>priority</div></div></div>
 <div class="tags">${n.lenses.slice(0,3).map(k=>`<span class="pill">${esc(lb(k))}</span>`).join('')}${n.facts.length?`<span class="pill n">${n.facts.length} verified facts</span>`:''}</div>
 <ul>${n.bullets.slice(0,o?99:2).map(b=>`<li>${esc(b)}</li>`).join('')}</ul><div class="row"><span>Section</span><b>${esc(grp(n))}</b></div>`+
 (o?`<div class="more">${n.exam_angle?`<p><b>Exam angle:</b> ${esc(n.exam_angle)}</p>`:''}${lp.map(([k,v])=>`<p><b>${esc(lb(k))}:</b> ${esc(v)}</p>`).join('')}${n.static_links.length?`<p><b>Static links:</b> ${n.static_links.map(esc).join('; ')}</p>`:''}<p>${n.sources.map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener">Source</a>`).join(' · ')}</p></div>`:'')+
 `<button class="open" onclick="tog(${n.id})">${o?'Hide details':'Read exam notes →'}</button></article>`}
 const edBlock=e=>`<section class="ed"><span class="tag" style="--c:#f59e0b">Editorial</span><h3>${esc(e.title)}</h3><div class="body">${md(e.body_md)}</div><div class="by">${esc(e.author)} · ${dt(e.day,{day:'numeric',month:'long',year:'numeric'})}</div></section>`;
+const shUrl=n=>location.origin+location.pathname+'?n='+n.id;
+const NL=String.fromCharCode(10),shTxt=n=>n.headline+(n.bullets[0]?' — '+n.bullets[0]:'')+NL+NL+'via GKMentor';
+function shr(id,el){const n=D.notes.find(x=>x.id===id);if(!n)return;const u=shUrl(n),t=shTxt(n);
+if(navigator.share&&matchMedia('(pointer:coarse)').matches){navigator.share({title:n.headline,text:t,url:u}).catch(()=>{});return}
+let m=$('shm');if(!m){m=document.createElement('div');m.id='shm';document.body.appendChild(m);document.addEventListener('click',e=>{if(!m.contains(e.target)&&!e.target.closest('.shr'))m.classList.remove('on')})}
+const E=encodeURIComponent,L=[['WhatsApp','https://wa.me/?text='+E(t+NL+u)],['X / Twitter','https://twitter.com/intent/tweet?text='+E(t)+'&url='+E(u)],['Facebook','https://www.facebook.com/sharer/sharer.php?u='+E(u)],['Telegram','https://t.me/share/url?url='+E(u)+'&text='+E(t)],['LinkedIn','https://www.linkedin.com/sharing/share-offsite/?url='+E(u)]];
+m.innerHTML=L.map(([k,h])=>`<a href="${esc(h)}" target="_blank" rel="noopener">${k}</a>`).join('')+'<button id="shc">Copy link</button>';
+$('shc').onclick=()=>{const done=()=>{$('shc').textContent='Link copied ✓'};navigator.clipboard?navigator.clipboard.writeText(u).then(done,()=>prompt('Copy this link',u)):prompt('Copy this link',u)};
+const r=el.getBoundingClientRect();m.classList.add('on');m.style.top=Math.min(r.bottom+6,innerHeight-m.offsetHeight-8)+'px';m.style.left=Math.max(8,Math.min(r.right-m.offsetWidth,innerWidth-m.offsetWidth-8))+'px'}
+let SHN=+new URLSearchParams(location.search).get('n')||0;
+function openShared(){if(!SHN)return;const n=D.notes.find(x=>x.id===SHN);if(!n)return;SHN=0;S.view='today';S.day=n.day;S.open.add(n.id);render();setTimeout(()=>{const c=$('n'+n.id);if(c)c.scrollIntoView({behavior:'smooth',block:'center'})},50)}
 const tog=id=>{S.open.has(id)?S.open.delete(id):S.open.add(id);render()};
 const bm=id=>{B.has(id)?B.delete(id):B.add(id);ls.set('gk_bm',JSON.stringify([...B]));push();render()};
 function vToday(){const dl=days();if(!dl.length)return empty();if(!S.day||!dl.includes(S.day))S.day=dl[0];
@@ -197,11 +210,11 @@ async function initAuth(){try{CFG=await jf('/auth/config');if(!('googleClientId'
 // Content: data.js (bundled with the site) shows instantly; then the live database replaces it if it has newer content.
 async function live(){try{const r=await fetch('/api/content',{credentials:'same-origin'});if(!r.ok)return;const x=await r.json();if(!x||!Array.isArray(x.notes))return;
 const sig=o=>[o.notes.length,o.questions.length,o.editorials.length,(o.gd||[]).length,(o.static||[]).reduce((a,c)=>a+c.items.length,0),o.notes[0]&&o.notes[0].id,o.notes[0]&&o.notes[0].headline].join('|');
-if(sig(x)!==sig(D)){Object.assign(D,x);render()}}catch(e){}}
+if(sig(x)!==sig(D)){Object.assign(D,x);render();openShared()}}catch(e){}}
 function urlFlags(){const q=new URLSearchParams(location.search);let shown=false;
 if(q.has('reset')){RTOK=q.get('reset');modal('reset');shown=true}
 else if(q.get('verified')==='1'){note('Email confirmed','Thanks! Your email address is confirmed.');shown=true}
 else if(q.get('verified')==='0'){note('Link expired','That confirmation link is invalid or has expired. Log in and use "Resend link" in your account.');shown=true}
 if(q.has('reset')||q.has('verified'))history.replaceState(null,'',location.pathname+location.hash);return shown}
-render();urlFlags();initAuth();if(location.protocol!=='file:')live();
+render();openShared();urlFlags();initAuth();if(location.protocol!=='file:')live();
 </script></body></html>

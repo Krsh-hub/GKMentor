@@ -183,7 +183,12 @@ def seed_if_empty(con):
         print(f"[db] seeding from site/data.js failed: {e}", file=sys.stderr)
 
 def log(con, day, stage, detail):
-    con.execute("INSERT INTO runs(day,stage,detail) VALUES(?,?,?)", (day, stage, str(detail)))
-    con.commit()
+    """Best effort: often called from an except block, so a database hiccup here must not turn a handled error into a failed run."""
+    try:
+        con.execute("INSERT INTO runs(day,stage,detail) VALUES(?,?,?)", (day, stage, str(detail)))
+        con.commit()
+    except Exception as e:
+        import sys
+        print(f"[db] could not log {stage}: {e}", file=sys.stderr, flush=True)
 
 

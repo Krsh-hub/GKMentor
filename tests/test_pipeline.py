@@ -1313,3 +1313,39 @@ def test_ai_cannot_draft_the_justice_and_president_lists_and_scheme_dates_must_h
     r = static_ai.draft_from_knowledge(con, Rows(), "schemes", "Health and nutrition")
     assert r == {"added": 2, "skipped": 0, "dropped": 2}
     assert "Only real central or major state schemes" in static_ai.GUIDE["schemes"] and len(static_ai.HINTS["schemes"]) == 12
+
+def test_crash_then_rerun_keeps_everything(tmp_path, monkeypatch):
+    """A run that dies after fetching (e.g. 'Cannot reach Turso') must not lose its articles: the rerun processes them."""
+    import sqlite3
+    from gk import analyze
+    con = fresh(tmp_path)
+    real = analyze.score_articles
+    def boom(*a, **k): raise sqlite3.OperationalError("Cannot reach Turso: Remote end closed connection without response")
+    monkeypatch.setattr(analyze, "score_articles", boom)
+    try: pipeline.run_daily("2026-10-05", mock=True, sources_path=DEMO, con=con)
+    except sqlite3.OperationalError: pass
+    monkeypatch.setattr(analyze, "score_articles", real)
+    s = pipeline.run_daily("2026-10-05", mock=True, sources_path=DEMO, con=con)
+    assert s["fetched"] == 0 and s["carried_over"] == 2       # nothing new on the feeds, but the saved articles are picked up
+    assert s["notes"] == 1 and con.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 1
+
+def test_notes_from_a_crashed_run_get_verified_and_quizzed(tmp_path, monkeypatch):
+    import sqlite3
+    con = fresh(tmp_path)
+    def boom(*a, **k): raise sqlite3.OperationalError("Cannot reach Turso")
+    monkeypatch.setattr(verify, "verify_note", boom)               # dies right after the note is stored
+    try: pipeline.run_daily("2026-10-05", mock=True, sources_path=DEMO, con=con)
+    except sqlite3.OperationalError: pass
+    assert con.execute("SELECT route FROM notes").fetchone()[0] is None
+    monkeypatch.undo()
+    s = pipeline.run_daily("2026-10-05", mock=True, sources_path=DEMO, con=con)
+    assert s["notes"] == 0 and s["resumed_notes"] == 1 and s["routes"] == {"auto": 1}
+    assert con.execute("SELECT route FROM notes").fetchone()[0] == "auto"
+    assert con.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 1
+    s3 = pipeline.run_daily("2026-10-05", mock=True, sources_path=DEMO, con=con)    # nothing left to resume: no duplicates
+    assert "resumed_notes" not in s3 and con.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 1
+
+def test_log_never_breaks_a_run():
+    class Dead:
+        def execute(self, *a): raise OSError("Remote end closed connection without response")
+    db.log(Dead(), "2026-10-05", "score_error", "x")                 # must not raise

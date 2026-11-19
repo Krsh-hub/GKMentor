@@ -122,3 +122,18 @@ def test_copy_local_database_to_turso(remote, tmp_path):
     assert db.copy_to_turso(local, replace=True)["notes"] == (1, 1)    # --replace wipes and copies again, no duplicates
     con = db.connect()
     assert con.execute("SELECT pw_hash FROM users").fetchone()[0].startswith("scrypt$")
+
+def test_stale_pooled_sockets_are_replaced(remote, monkeypatch):
+    """Every pooled keep-alive socket was dropped by the server during a long AI call: the query must still go through."""
+    import http.client, time as _t
+    con = db.connect()
+    class Dead:
+        def request(self, *a, **k): raise http.client.RemoteDisconnected("Remote end closed connection without response")
+        def close(self): pass
+    pool = con.pool
+    while not pool.q.empty(): pool.q.get_nowait()
+    for _ in range(3): pool.q.put_nowait((Dead(), _t.monotonic()))     # look fresh, but the server already closed them
+    monkeypatch.setattr(turso.Connection, "_wait", staticmethod(lambda a: None))
+    assert con.execute("SELECT 1 AS x").fetchone()["x"] == 1
+    pool.q.put_nowait((Dead(), _t.monotonic() - turso.IDLE_MAX - 1))   # idle too long: closed, never used
+    assert con.execute("SELECT 2 AS x").fetchone()["x"] == 2

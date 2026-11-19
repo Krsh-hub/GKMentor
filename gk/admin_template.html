@@ -124,7 +124,7 @@ const fmtT=t=>t?new Date(t).toLocaleString([], {day:'numeric',month:'short',hour
 const dur=(a,b)=>{if(!a)return'';const s=Math.max(0,Math.round(((b?new Date(b):new Date())-new Date(a))/1000));return s<60?s+'s':Math.floor(s/60)+'m '+(s%60)+'s'};
 const stPill=s=>`<span class="pill ${s==='done'?'ok':s==='running'?'run':s==='partial'?'n':'r'}">${esc(s)}</span>`;
 function summary(r){if(!r)return'';if(r.error)return'Error: '+r.error;const d=r.daily||r;const bits=[];
-if(d.notes!=null)bits.push(`${d.notes} notes`);if(d.fetched!=null)bits.push(`${d.fetched} fetched`);if(d.stopped)bits.push('stopped: '+d.stopped);
+if(d.notes!=null)bits.push(`${d.notes} notes`);if(d.fetched!=null)bits.push(`${d.fetched} fetched`+(d.carried_over?` + ${d.carried_over} carried over`:``));if(d.resumed_notes)bits.push(`${d.resumed_notes} notes resumed`);if(d.stopped)bits.push('stopped: '+d.stopped);
 if(r.gd&&r.gd.gd_topics_drafted!=null)bits.push(`${r.gd.gd_topics_drafted} GD`);if(r.gd_topics_drafted!=null)bits.push(`${r.gd_topics_drafted} GD topics`);
 if(r.publish)bits.push(r.publish.error?'GitHub: '+r.publish.error:'GitHub backup '+(r.publish.commit||'ok'));if(r.commit)bits.push('commit '+r.commit);
 if(r.added!=null)bits.push(`${r.added} drafted`);if(r.applied!=null)bits.push(`${r.applied} rates applied, ${r.waiting} waiting`);

@@ -4,7 +4,7 @@ Set TURSO_DATABASE_URL (libsql://<db>-<org>.turso.io) and TURSO_AUTH_TOKEN and t
 Speaks Turso's "Hrana over HTTP" v2 protocol (POST /v2/pipeline). Each statement auto-commits, so commit() is a no-op.
 HTTPS connections are pooled and kept alive, so a query costs one network round trip: put the Turso database in the
 same region as the backend (e.g. both in Singapore or both in Oregon)."""
-import base64, http.client, json, queue, sqlite3, threading
+import base64, http.client, json, queue, sqlite3, threading, time
 from urllib.parse import urlparse
 
 VERSION = [0]                                 # bumped on every write; lets readers cache results (see site.cached_site_data)
@@ -66,14 +66,23 @@ def _error(e):
 
 _READ = ("SELECT", "PRAGMA TABLE_INFO", "WITH", "EXPLAIN")
 
+IDLE_MAX = 20                                 # seconds a pooled socket may sit unused; Turso/proxies drop idle keep-alives
+RETRIES = 5                                   # attempts per request (network blips, 5xx, 429)
+
 class _Pool:
+    """Keeps (connection, last_used) pairs. Sockets idle longer than IDLE_MAX are closed instead of reused: during a long
+    AI call the server silently drops them, and reusing one gives 'Remote end closed connection without response'."""
     def __init__(self, host, tls=True, size=8): self.host, self.tls, self.q = host, tls, queue.LifoQueue(size)
+    def new(self):
+        return (http.client.HTTPSConnection if self.tls else http.client.HTTPConnection)(self.host, timeout=60)
     def get(self):
-        try: return self.q.get_nowait()
-        except queue.Empty:
-            return (http.client.HTTPSConnection if self.tls else http.client.HTTPConnection)(self.host, timeout=60)
+        while True:
+            try: c, used = self.q.get_nowait()
+            except queue.Empty: return self.new()
+            if time.monotonic() - used <= IDLE_MAX: return c
+            c.close()
     def put(self, c):
-        try: self.q.put_nowait(c)
+        try: self.q.put_nowait((c, time.monotonic()))
         except queue.Full: c.close()
 
 _pools, _plock = {}, threading.Lock()
@@ -89,18 +98,27 @@ class Connection:
     def _post(self, body):
         if self.transport: return self.transport(body)
         raw, last = json.dumps(body).encode(), None
-        for attempt in (1, 2):                        # a pooled keep-alive socket may have been closed by the server: retry once
-            c = self.pool.get()
+        for attempt in range(RETRIES):
+            # first try a pooled keep-alive socket; after any failure use a brand-new one (the rest of the pool may be stale too)
+            c = self.pool.get() if attempt == 0 else self.pool.new()
             try:
                 c.request("POST", "/v2/pipeline", raw, {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"})
                 r = c.getresponse(); data = r.read()
                 if r.status >= 400:
                     c.close()
-                    raise sqlite3.OperationalError(f"Turso HTTP {r.status}: {data[:300].decode('utf-8', 'replace')}")
+                    msg = f"Turso HTTP {r.status}: {data[:300].decode('utf-8', 'replace')}"
+                    if r.status == 429 or r.status >= 500:              # Turso busy/restarting: worth another try
+                        last = msg; self._wait(attempt); continue
+                    raise sqlite3.OperationalError(msg)
                 self.pool.put(c); return json.loads(data)
             except (http.client.HTTPException, ConnectionError, OSError) as e:
                 c.close(); last = e
+                if attempt: self._wait(attempt)                          # a stale pooled socket is retried at once
         raise sqlite3.OperationalError(f"Cannot reach Turso: {last}")
+
+    @staticmethod
+    def _wait(attempt):
+        time.sleep(min(8, 0.5 * 2 ** attempt))                         # 1s, 2s, 4s, 8s
 
     def _run(self, reqs):
         res = self._post({"requests": reqs + [{"type": "close"}]})["results"]
